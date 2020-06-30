@@ -1278,10 +1278,6 @@ Wire Wire Line
 	6800 1600 7150 1600
 Text GLabel 3250 5900 0    50   Input ~ 0
 RESET
-Wire Wire Line
-	3450 1300 3800 1300
-Wire Wire Line
-	3800 1400 3450 1400
 Text GLabel 3450 2100 0    50   Output ~ 0
 MB1-1
 Text GLabel 3450 2200 0    50   Output ~ 0
@@ -1464,4 +1460,8 @@ Wire Wire Line
 	3250 6000 3550 6000
 NoConn ~ 3850 4450
 NoConn ~ 3550 5800
+NoConn ~ 3800 1300
+NoConn ~ 3800 1400
+NoConn ~ 3550 6600
+NoConn ~ 3550 6700
 $EndSCHEMATC
