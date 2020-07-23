@@ -22,11 +22,13 @@
 #ifndef HI3593_H
 #define HI3593_H
 
+#include "bricklib2/hal/spi_fifo/spi_fifo.h"
+
 #include <stdint.h>
 #include <stdbool.h>
 
 typedef struct {
-
+    SPIFifo spi_fifo;
 } HI3593;
 
 extern HI3593 hi3593;
