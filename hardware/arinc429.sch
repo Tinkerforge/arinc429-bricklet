@@ -1302,20 +1302,20 @@ Text GLabel 3450 3100 0    50   Output ~ 0
 TEMPY
 Text GLabel 3450 3200 0    50   Output ~ 0
 TFULL
-Text GLabel 3250 5500 0    50   Output ~ 0
+Text GLabel 3250 5600 0    50   Output ~ 0
 M-CS
 Text GLabel 3250 5200 0    50   Output ~ 0
 M-MOSI
-Text GLabel 3250 5400 0    50   Input ~ 0
+Text GLabel 3250 5500 0    50   Input ~ 0
 M-CLK
 Wire Wire Line
 	3250 5200 3550 5200
 Wire Wire Line
 	3550 5300 3250 5300
 Wire Wire Line
-	3250 5400 3550 5400
+	3250 5500 3550 5500
 Wire Wire Line
-	3550 5500 3250 5500
+	3550 5600 3250 5600
 Wire Wire Line
 	3450 2100 3850 2100
 Wire Wire Line
@@ -1435,14 +1435,14 @@ Text GLabel 1700 3550 2    50   Input ~ 0
 TX_LED
 Text GLabel 1700 3850 2    50   Input ~ 0
 RX_LED
-Text GLabel 3250 5700 0    50   Input ~ 0
+Text GLabel 3250 5800 0    50   Input ~ 0
 TX_LED
 Text GLabel 3250 6000 0    50   Input ~ 0
 RX_LED
 Wire Wire Line
-	3250 5600 3550 5600
+	3250 5700 3550 5700
 Wire Wire Line
-	3550 5700 3250 5700
+	3550 5800 3250 5800
 Connection ~ 700  3850
 Text GLabel 1700 4150 2    50   Input ~ 0
 Status_LED
@@ -1454,14 +1454,14 @@ Wire Wire Line
 	2950 4350 3850 4350
 Wire Wire Line
 	3850 4650 3600 4650
-Text GLabel 3250 5600 0    50   Input ~ 0
+Text GLabel 3250 5700 0    50   Input ~ 0
 CLOCK
 Wire Wire Line
 	3250 6000 3550 6000
 NoConn ~ 3850 4450
-NoConn ~ 3550 5800
 NoConn ~ 3800 1300
 NoConn ~ 3800 1400
 NoConn ~ 3550 6600
 NoConn ~ 3550 6700
+NoConn ~ 3550 5400
 $EndSCHEMATC
