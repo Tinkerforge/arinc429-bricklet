@@ -20,17 +20,18 @@
  */
 
 #include "hi3593.h"
-#include "configs/config_hi3593.h"
 
 #include "bricklib2/hal/ccu4_pwm/ccu4_pwm.h"
 #include "bricklib2/utility/util_definitions.h"
 #include "bricklib2/os/coop_task.h"
 #include "bricklib2/logging/logging.h"
 
+#include "opcode_length.inc"
+
 CoopTask hi3593_task;
 HI3593 hi3593;
 
-uint8_t hi3593_input_pins[HI3593_INPUT_PINS_NUM] = {
+const uint8_t hi3593_input_pins[HI3593_INPUT_PINS_NUM] = {
 	HI3593_MB11_PIN,
 	HI3593_MB12_PIN,
 	HI3593_MB13_PIN,
@@ -45,7 +46,7 @@ uint8_t hi3593_input_pins[HI3593_INPUT_PINS_NUM] = {
 	HI3593_TFULL_PIN
 };
 
-XMC_GPIO_PORT_t *hi3593_input_ports[HI3593_INPUT_PINS_NUM] = {
+XMC_GPIO_PORT_t *const hi3593_input_ports[HI3593_INPUT_PINS_NUM] = {
 	HI3593_MB11_PORT,
 	HI3593_MB12_PORT,
 	HI3593_MB13_PORT,
@@ -60,32 +61,26 @@ XMC_GPIO_PORT_t *hi3593_input_ports[HI3593_INPUT_PINS_NUM] = {
 	HI3593_TFULL_PORT
 };
 
-void hi3593_write_register(const uint8_t opcode, const uint8_t *data, const uint8_t length) {
+uint32_t hi3593_task_write_register(const uint8_t opcode, const uint8_t *data, const uint8_t length) {
 	uint8_t opcode_and_data[257] = {opcode};
 	memcpy(opcode_and_data+1, data, length);
-	bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);
-	// TODO: Check ret, handle error
+	const bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);
+	// TODO: Check ret, handle different error cases
+
+	return ret ? 0 : 1;
 }
 
-void hi3593_read_register(const uint8_t opcode, uint8_t *data, const uint8_t length) {
+uint32_t hi3593_task_read_register(const uint8_t opcode, uint8_t *data, const uint8_t length) {
 	uint8_t opcode_and_data[257] = {(1 << 7) | opcode};
-	bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);
-	// TODO: Check ret, handle error
+	const bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);
+	// TODO: Check ret, handle different error cases
+
 	memcpy(data, opcode_and_data+1, length);
+	return ret ? 0 : 1;
 }
 
 void hi3593_task_tick(void) {
-	uint8_t test_write = 0b10101010;
-	hi3593_write_register(0x10, &test_write, 1);
-
-	uint8_t test_read = 0;
 	while(true) {
-		hi3593_read_register(0x94, &test_read, 1);
-		logd("0x94 -> %d\n\r", test_read);
-		hi3593_read_register(0x80, &test_read, 1);
-		logd("0x80 -> %d\n\r", test_read);
-
-		coop_task_sleep_ms(500);
 		coop_task_yield();
 	}
 }

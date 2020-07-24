@@ -22,6 +22,7 @@
 #ifndef HI3593_H
 #define HI3593_H
 
+#include "configs/config_hi3593.h"
 #include "bricklib2/hal/spi_fifo/spi_fifo.h"
 
 #include <stdint.h>
@@ -32,8 +33,12 @@ typedef struct {
 } HI3593;
 
 extern HI3593 hi3593;
+extern const uint8_t hi3593_input_pins[HI3593_INPUT_PINS_NUM];
+extern XMC_GPIO_PORT_t *const hi3593_input_ports[HI3593_INPUT_PINS_NUM];
 
 void hi3593_init(void);
 void hi3593_tick(void);
+uint32_t hi3593_task_write_register(const uint8_t opcode, const uint8_t *data, const uint8_t length);
+uint32_t hi3593_task_read_register(const uint8_t opcode, uint8_t *data, const uint8_t length);
 
 #endif
