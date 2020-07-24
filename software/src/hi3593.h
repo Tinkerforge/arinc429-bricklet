@@ -24,11 +24,15 @@
 
 #include "configs/config_hi3593.h"
 #include "bricklib2/hal/spi_fifo/spi_fifo.h"
+#include "bricklib2/utility/led_flicker.h"
 
 #include <stdint.h>
 #include <stdbool.h>
 
 typedef struct {
+    LEDFlickerState led_flicker_state_rx;
+    LEDFlickerState led_flicker_state_tx;
+
     SPIFifo spi_fifo;
 } HI3593;
 

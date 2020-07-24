@@ -67,6 +67,9 @@ uint32_t hi3593_task_write_register(const uint8_t opcode, const uint8_t *data, c
 	const bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);
 	// TODO: Check ret, handle different error cases
 
+	// For now we blink the TX LED when we write a register
+	// Later we can also blink this with actual TX data transfer
+	hi3593.led_flicker_state_tx.counter += length;
 	return ret ? 0 : 1;
 }
 
@@ -76,6 +79,10 @@ uint32_t hi3593_task_read_register(const uint8_t opcode, uint8_t *data, const ui
 	// TODO: Check ret, handle different error cases
 
 	memcpy(data, opcode_and_data+1, length);
+
+	// For now we blink the RX LED when we read a register
+	// Later we can also blink this with actual RX data transfer
+	hi3593.led_flicker_state_rx.counter += length;
 	return ret ? 0 : 1;
 }
 
@@ -144,9 +151,15 @@ void hi3593_init(void) {
 	ccu4_pwm_init(HI3593_CLOCK, HI3593_CLOCK_SLICE_NUMBER, HI3593_CLOCK_PERIOD-1);
 	ccu4_pwm_set_duty_cycle(HI3593_CLOCK_SLICE_NUMBER, HI3593_CLOCK_PERIOD/2);
 
+	hi3593.led_flicker_state_rx.config = LED_FLICKER_CONFIG_STATUS;
+	hi3593.led_flicker_state_tx.config = LED_FLICKER_CONFIG_STATUS;
+
 	coop_task_init(&hi3593_task, hi3593_task_tick);
 }
 
 void hi3593_tick(void) {
+	led_flicker_tick(&hi3593.led_flicker_state_rx, system_timer_get_ms(), HI3593_RX_LED);
+	led_flicker_tick(&hi3593.led_flicker_state_tx, system_timer_get_ms(), HI3593_TX_LED);
+
 	coop_task_tick(&hi3593_task);
 }
