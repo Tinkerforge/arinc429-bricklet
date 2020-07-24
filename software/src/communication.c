@@ -80,6 +80,10 @@ BootloaderHandleMessageResponse debug_read_register_low_level(const DebugReadReg
 }
 
 BootloaderHandleMessageResponse debug_write_register_low_level(const DebugWriteRegisterLowLevel *data, DebugWriteRegisterLowLevel_Response *response) {
+	if(data->value_length > 32) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
 	response->header.length = sizeof(DebugWriteRegisterLowLevel_Response);
 	if(opcode_length[data->op_code] < 0) {
 		response->rw_error = ARINC429_RW_ERROR_INVALID_OP_CODE;
