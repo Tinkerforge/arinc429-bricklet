@@ -34,6 +34,7 @@
 #define FIRMWARE_VERSION_REVISION 0
 
 #define SPI_FIFO_COOP_ENABLE
+#define SPI_FIFO_COOP_USE_MUTEX
 #define CCU4_PWM_PUSH_PULL_ALT XMC_GPIO_MODE_OUTPUT_PUSH_PULL_ALT4
 
 #include "config_custom_bootloader.h"
