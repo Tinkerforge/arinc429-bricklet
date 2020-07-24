@@ -35,6 +35,13 @@ void communication_init(void);
 
 // Constants
 
+#define ARINC429_RW_ERROR_OK 0
+#define ARINC429_RW_ERROR_NO_WRITE 1
+#define ARINC429_RW_ERROR_NO_READ 2
+#define ARINC429_RW_ERROR_INVALID_OP_CODE 3
+#define ARINC429_RW_ERROR_INVALID_LENGTH 4
+#define ARINC429_RW_ERROR_SPI 5
+
 #define ARINC429_BOOTLOADER_MODE_BOOTLOADER 0
 #define ARINC429_BOOTLOADER_MODE_FIRMWARE 1
 #define ARINC429_BOOTLOADER_MODE_BOOTLOADER_WAIT_FOR_REBOOT 2
@@ -54,12 +61,50 @@ void communication_init(void);
 #define ARINC429_STATUS_LED_CONFIG_SHOW_STATUS 3
 
 // Function and callback IDs and structs
+#define FID_DEBUG_GET_DISCRETES 1
+#define FID_DEBUG_READ_REGISTER_LOW_LEVEL 2
+#define FID_DEBUG_WRITE_REGISTER_LOW_LEVEL 3
 
 
+typedef struct {
+	TFPMessageHeader header;
+} __attribute__((__packed__)) DebugGetDiscretes;
+
+typedef struct {
+	TFPMessageHeader header;
+	uint16_t rx_discretes;
+	uint16_t tx_discretes;
+} __attribute__((__packed__)) DebugGetDiscretes_Response;
+
+typedef struct {
+	TFPMessageHeader header;
+	uint8_t op_code;
+} __attribute__((__packed__)) DebugReadRegisterLowLevel;
+
+typedef struct {
+	TFPMessageHeader header;
+	uint8_t value_length;
+	uint8_t value_data[32];
+	uint8_t rw_error;
+} __attribute__((__packed__)) DebugReadRegisterLowLevel_Response;
+
+typedef struct {
+	TFPMessageHeader header;
+	uint8_t op_code;
+	uint8_t value_length;
+	uint8_t value_data[32];
+} __attribute__((__packed__)) DebugWriteRegisterLowLevel;
+
+typedef struct {
+	TFPMessageHeader header;
+	uint8_t rw_error;
+} __attribute__((__packed__)) DebugWriteRegisterLowLevel_Response;
 
 
 // Function prototypes
-
+BootloaderHandleMessageResponse debug_get_discretes(const DebugGetDiscretes *data, DebugGetDiscretes_Response *response);
+BootloaderHandleMessageResponse debug_read_register_low_level(const DebugReadRegisterLowLevel *data, DebugReadRegisterLowLevel_Response *response);
+BootloaderHandleMessageResponse debug_write_register_low_level(const DebugWriteRegisterLowLevel *data, DebugWriteRegisterLowLevel_Response *response);
 
 // Callbacks
 
