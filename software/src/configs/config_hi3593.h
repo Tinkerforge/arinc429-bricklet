@@ -106,9 +106,9 @@
 #define HI3593_R1FLAG_PIN             9
 #define HI3593_R1FLAG_INDEX           9
 
-#define HI3593_TEMPY_PORT             XMC_GPIO_PORT2
-#define HI3593_TEMPY_PIN              10
-#define HI3593_TEMPY_INDEX            10
+#define HI3593_TEMPTY_PORT            XMC_GPIO_PORT2
+#define HI3593_TEMPTY_PIN             10
+#define HI3593_TEMPTY_INDEX           10
 #define HI3593_TFULL_PORT             XMC_GPIO_PORT2
 #define HI3593_TFULL_PIN              11
 #define HI3593_TFULL_INDEX            11
