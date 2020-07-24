@@ -27,19 +27,31 @@
 #include "bricklib2/bootloader/bootloader.h"
 #include "bricklib2/hal/system_timer/system_timer.h"
 #include "bricklib2/logging/logging.h"
+#include "bricklib2/os/coop_task.h"
 #include "communication.h"
 #include "hi3593.h"
+
+// We run communication and bootloader tick in task,
+// so we can yield from within a communication getter/setter.
+CoopTask main_task;
+void main_tick_task(void) {
+	while(true) {
+		bootloader_tick();
+		communication_tick();
+		coop_task_yield();
+	}
+}
 
 int main(void) {
 	logging_init();
 	logd("Start ARINC429 Bricklet\n\r");
 
 	communication_init();
+	coop_task_init(&main_task, main_tick_task);
 	hi3593_init();
 
 	while(true) {
-		bootloader_tick();
-		communication_tick();
+		coop_task_tick(&main_task);
 		hi3593_tick();
 	}
 }
