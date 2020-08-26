@@ -30,6 +30,7 @@
 #include "bricklib2/os/coop_task.h"
 #include "communication.h"
 #include "hi3593.h"
+#include "arinc429.h"
 
 // We run communication and bootloader tick in task,
 // so we can yield from within a communication getter/setter.
@@ -49,9 +50,11 @@ int main(void) {
 	communication_init();
 	coop_task_init(&main_task, main_tick_task);
 	hi3593_init();
+	arinc429_init();
 
 	while(true) {
 		coop_task_tick(&main_task);
 		hi3593_tick();
+		arinc429_tick();
 	}
 }
