@@ -47,9 +47,13 @@ typedef struct {
 	uint8_t mode;
 	uint8_t heartbeat_period;
 	uint8_t heartbeat_timer;
-} PACKED ARINC429Channel;
 
-#if 0
+	bool    config_new;
+	uint8_t config_parity;
+	uint8_t config_speed;
+} PACKED ARINC429Common;
+
+#if 1
 typedef struct {
 	uint32_t data_age;
 	uint8_t timeout;
@@ -68,6 +72,7 @@ typedef struct {
 	uint8_t label[ARINC429_RX_LABEL_NUM];
 	uint8_t prio_label[ARINC429_RX_PRIO_LABEL_NUM];
 	ARINC429RXFrame frame[ARINC429_RX_FRAME_NUM];
+	ARINC429Common common;
 } PACKED ARINC429RXChannel;
 
 typedef struct {
@@ -83,13 +88,13 @@ typedef struct {
 	uint8_t schedule_slot;
 	ARINC429TXSlot tx_slot[ARINC429_TX_SLOTS_NUM];
 	ARINC429TXFrame frame[ARINC429_TX_FRAME_NUM];
+	ARINC429Common common;
 } PACKED ARINC429TXChannel;
 
 
 typedef struct {
-	ARINC429Channel channel[ARINC429_CHANNEL_TOTAL_NUM];
-	ARINC429RXChannel rx_channel[ARINC429_CHANNEL_RX_NUM];
 	ARINC429TXChannel tx_channel[ARINC429_CHANNEL_TX_NUM];
+	ARINC429RXChannel rx_channel[ARINC429_CHANNEL_RX_NUM];
 } PACKED ARINC429;
 
 extern ARINC429 arinc429;

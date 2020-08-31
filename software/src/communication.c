@@ -27,6 +27,7 @@
 
 #include "xmc_gpio.h"
 #include "hi3593.h"
+#include "arinc429.h"
 
 extern const int8_t opcode_length[256];
 
@@ -167,6 +168,32 @@ BootloaderHandleMessageResponse set_channel_configuration(const SetChannelConfig
 		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	}
 
+	if(data->parity > ARINC429_A429_PARITY_PARITY) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
+	if(data->speed > ARINC429_A429_SPEED_LS) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
+	if((data->channel == ARINC429_A429_CHANNEL_TX) || (data->channel == ARINC429_A429_CHANNEL_TX1)) {
+		arinc429.tx_channel[0].common.config_parity = data->parity;
+		arinc429.tx_channel[0].common.config_speed  = data->speed;
+		arinc429.tx_channel[0].common.config_new    = true;
+	}
+
+	if((data->channel == ARINC429_A429_CHANNEL_RX) || (data->channel == ARINC429_A429_CHANNEL_RX1)) {
+		arinc429.rx_channel[0].common.config_parity = data->parity;
+		arinc429.rx_channel[0].common.config_speed  = data->speed;
+		arinc429.rx_channel[0].common.config_new    = true;
+	}
+
+	if((data->channel == ARINC429_A429_CHANNEL_RX) || (data->channel == ARINC429_A429_CHANNEL_RX2)) {
+		arinc429.rx_channel[1].common.config_parity = data->parity;
+		arinc429.rx_channel[1].common.config_speed  = data->speed;
+		arinc429.rx_channel[1].common.config_new    = true;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -176,6 +203,30 @@ BootloaderHandleMessageResponse get_channel_configuration(const GetChannelConfig
 	if(!check_channel(data->channel, false)) {
 		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	}
+
+	switch(data->channel) {
+		case ARINC429_A429_CHANNEL_TX1: {
+			response->parity = arinc429.tx_channel[0].common.config_parity;
+			response->speed  = arinc429.tx_channel[0].common.config_speed;
+			break;
+		}
+
+		case ARINC429_A429_CHANNEL_RX1: {
+			response->parity = arinc429.rx_channel[0].common.config_parity;
+			response->speed  = arinc429.rx_channel[0].common.config_speed;
+			break;
+		}
+
+		case ARINC429_A429_CHANNEL_RX2: {
+			response->parity = arinc429.rx_channel[1].common.config_parity;
+			response->speed  = arinc429.rx_channel[1].common.config_speed;
+			break;
+		}
+
+		default: {
+			return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+		}
+	}		
 
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
@@ -365,9 +416,9 @@ bool handle_receive_frame_callback(void) {
 }
 
 void communication_tick(void) {
-	communication_callback_tick();
+//	communication_callback_tick();
 }
 
 void communication_init(void) {
-	communication_callback_init();
+//	communication_callback_init();
 }
