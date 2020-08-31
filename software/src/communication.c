@@ -35,9 +35,31 @@ BootloaderHandleMessageResponse handle_message(const void *message, void *respon
 		case FID_DEBUG_GET_DISCRETES: return debug_get_discretes(message, response);
 		case FID_DEBUG_READ_REGISTER_LOW_LEVEL: return debug_read_register_low_level(message, response);
 		case FID_DEBUG_WRITE_REGISTER_LOW_LEVEL: return debug_write_register_low_level(message, response);
+		case FID_GET_CAPABILITIES: return get_capabilities(message, response);
+		case FID_SET_HEARTBEAT_CALLBACK_CONFIGURATION: return set_heartbeat_callback_configuration(message);
+		case FID_GET_HEARTBEAT_CALLBACK_CONFIGURATION: return get_heartbeat_callback_configuration(message, response);
+		case FID_SET_CHANNEL_CONFIGURATION: return set_channel_configuration(message);
+		case FID_GET_CHANNEL_CONFIGURATION: return get_channel_configuration(message, response);
+		case FID_SET_CHANNEL_MODE: return set_channel_mode(message);
+		case FID_GET_CHANNEL_MODE: return get_channel_mode(message, response);
+		case FID_CLEAR_PRIO_LABELS: return clear_prio_labels(message);
+		case FID_SET_PRIO_LABELS: return set_prio_labels(message);
+		case FID_GET_PRIO_LABELS: return get_prio_labels(message, response);
+		case FID_CLEAR_RX_LABELS: return clear_rx_labels(message);
+		case FID_SET_RX_LABEL_CONFIGURATION: return set_rx_label_configuration(message);
+		case FID_GET_RX_LABEL_CONFIGURATION: return get_rx_label_configuration(message, response);
+		case FID_READ_NEXT_FRAME: return read_next_frame(message, response);
+		case FID_SET_RECEIVE_FRAME_CALLBACK_CONFIGURATION: return set_receive_frame_callback_configuration(message);
+		case FID_GET_RECEIVE_FRAME_CALLBACK_CONFIGURATION: return get_receive_frame_callback_configuration(message, response);
+		case FID_WRITE_FRAME_DIRECT: return write_frame_direct(message);
+		case FID_WRITE_FRAME_SCHEDULED: return write_frame_scheduled(message);
+		case FID_SET_SCHEDULE_ENTRY: return set_schedule_entry(message);
+		case FID_GET_SCHEDULE_ENTRY: return get_schedule_entry(message, response);
+		case FID_CLEAR_SCHEDULE_ENTRIES: return clear_schedule_entries(message);
 		default: return HANDLE_MESSAGE_RESPONSE_NOT_SUPPORTED;
 	}
 }
+
 
 BootloaderHandleMessageResponse debug_get_discretes(const DebugGetDiscretes *data, DebugGetDiscretes_Response *response) {
 	response->header.length = sizeof(DebugGetDiscretes_Response);
@@ -102,9 +124,171 @@ BootloaderHandleMessageResponse debug_write_register_low_level(const DebugWriteR
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
+BootloaderHandleMessageResponse get_capabilities(const GetCapabilities *data, GetCapabilities_Response *response) {
+	response->header.length = sizeof(GetCapabilities_Response);
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+BootloaderHandleMessageResponse set_heartbeat_callback_configuration(const SetHeartbeatCallbackConfiguration *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse get_heartbeat_callback_configuration(const GetHeartbeatCallbackConfiguration *data, GetHeartbeatCallbackConfiguration_Response *response) {
+	response->header.length = sizeof(GetHeartbeatCallbackConfiguration_Response);
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+BootloaderHandleMessageResponse set_channel_configuration(const SetChannelConfiguration *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse get_channel_configuration(const GetChannelConfiguration *data, GetChannelConfiguration_Response *response) {
+	response->header.length = sizeof(GetChannelConfiguration_Response);
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+BootloaderHandleMessageResponse set_channel_mode(const SetChannelMode *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse get_channel_mode(const GetChannelMode *data, GetChannelMode_Response *response) {
+	response->header.length = sizeof(GetChannelMode_Response);
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+BootloaderHandleMessageResponse clear_prio_labels(const ClearPrioLabels *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse set_prio_labels(const SetPrioLabels *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse get_prio_labels(const GetPrioLabels *data, GetPrioLabels_Response *response) {
+	response->header.length = sizeof(GetPrioLabels_Response);
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+BootloaderHandleMessageResponse clear_rx_labels(const ClearRXLabels *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse set_rx_label_configuration(const SetRXLabelConfiguration *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse get_rx_label_configuration(const GetRXLabelConfiguration *data, GetRXLabelConfiguration_Response *response) {
+	response->header.length = sizeof(GetRXLabelConfiguration_Response);
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+BootloaderHandleMessageResponse read_next_frame(const ReadNextFrame *data, ReadNextFrame_Response *response) {
+	response->header.length = sizeof(ReadNextFrame_Response);
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+BootloaderHandleMessageResponse set_receive_frame_callback_configuration(const SetReceiveFrameCallbackConfiguration *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse get_receive_frame_callback_configuration(const GetReceiveFrameCallbackConfiguration *data, GetReceiveFrameCallbackConfiguration_Response *response) {
+	response->header.length = sizeof(GetReceiveFrameCallbackConfiguration_Response);
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+BootloaderHandleMessageResponse write_frame_direct(const WriteFrameDirect *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse write_frame_scheduled(const WriteFrameScheduled *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse set_schedule_entry(const SetScheduleEntry *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+BootloaderHandleMessageResponse get_schedule_entry(const GetScheduleEntry *data, GetScheduleEntry_Response *response) {
+	response->header.length = sizeof(GetScheduleEntry_Response);
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntries *data) {
+
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
+
+
+
+
+bool handle_heartbeat_callback(void) {
+	static bool is_buffered = false;
+	static Heartbeat_Callback cb;
+
+	if(!is_buffered) {
+		tfp_make_default_header(&cb.header, bootloader_get_uid(), sizeof(Heartbeat_Callback), FID_CALLBACK_HEARTBEAT);
+		// TODO: Implement Heartbeat callback handling
+
+		return false;
+	}
+
+	if(bootloader_spitfp_is_send_possible(&bootloader_status.st)) {
+		bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb, sizeof(Heartbeat_Callback));
+		is_buffered = false;
+		return true;
+	} else {
+		is_buffered = true;
+	}
+
+	return false;
+}
+
+bool handle_receive_frame_callback(void) {
+	static bool is_buffered = false;
+	static ReceiveFrame_Callback cb;
+
+	if(!is_buffered) {
+		tfp_make_default_header(&cb.header, bootloader_get_uid(), sizeof(ReceiveFrame_Callback), FID_CALLBACK_RECEIVE_FRAME);
+		// TODO: Implement ReceiveFrame callback handling
+
+		return false;
+	}
+
+	if(bootloader_spitfp_is_send_possible(&bootloader_status.st)) {
+		bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb, sizeof(ReceiveFrame_Callback));
+		is_buffered = false;
+		return true;
+	} else {
+		is_buffered = true;
+	}
+
+	return false;
+}
 
 void communication_tick(void) {
+	communication_callback_tick();
 }
 
 void communication_init(void) {
+	communication_callback_init();
 }
