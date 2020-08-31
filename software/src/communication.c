@@ -60,6 +60,20 @@ BootloaderHandleMessageResponse handle_message(const void *message, void *respon
 	}
 }
 
+// Assumes one TX und two RX channels
+static bool check_channel(const uint8_t channel, const bool is_setter) {
+	// Allow TX1, RX1 and RX2
+	if((channel == 1) || (channel == 33) || (channel == 34)) {
+		return true;
+	}
+
+	// Allow "all RX/TX channel" for setter, but not for getter
+	if(is_setter && ((channel == 0) || (channel == 32))) {
+		return true;
+	}
+
+	return false;
+}
 
 BootloaderHandleMessageResponse debug_get_discretes(const DebugGetDiscretes *data, DebugGetDiscretes_Response *response) {
 	response->header.length = sizeof(DebugGetDiscretes_Response);
@@ -131,6 +145,9 @@ BootloaderHandleMessageResponse get_capabilities(const GetCapabilities *data, Ge
 }
 
 BootloaderHandleMessageResponse set_heartbeat_callback_configuration(const SetHeartbeatCallbackConfiguration *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
@@ -138,10 +155,17 @@ BootloaderHandleMessageResponse set_heartbeat_callback_configuration(const SetHe
 BootloaderHandleMessageResponse get_heartbeat_callback_configuration(const GetHeartbeatCallbackConfiguration *data, GetHeartbeatCallbackConfiguration_Response *response) {
 	response->header.length = sizeof(GetHeartbeatCallbackConfiguration_Response);
 
+	if(!check_channel(data->channel, false)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 BootloaderHandleMessageResponse set_channel_configuration(const SetChannelConfiguration *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
@@ -149,10 +173,17 @@ BootloaderHandleMessageResponse set_channel_configuration(const SetChannelConfig
 BootloaderHandleMessageResponse get_channel_configuration(const GetChannelConfiguration *data, GetChannelConfiguration_Response *response) {
 	response->header.length = sizeof(GetChannelConfiguration_Response);
 
+	if(!check_channel(data->channel, false)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 BootloaderHandleMessageResponse set_channel_mode(const SetChannelMode *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
@@ -160,15 +191,25 @@ BootloaderHandleMessageResponse set_channel_mode(const SetChannelMode *data) {
 BootloaderHandleMessageResponse get_channel_mode(const GetChannelMode *data, GetChannelMode_Response *response) {
 	response->header.length = sizeof(GetChannelMode_Response);
 
+	if(!check_channel(data->channel, false)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 BootloaderHandleMessageResponse clear_prio_labels(const ClearPrioLabels *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
 BootloaderHandleMessageResponse set_prio_labels(const SetPrioLabels *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
@@ -176,15 +217,25 @@ BootloaderHandleMessageResponse set_prio_labels(const SetPrioLabels *data) {
 BootloaderHandleMessageResponse get_prio_labels(const GetPrioLabels *data, GetPrioLabels_Response *response) {
 	response->header.length = sizeof(GetPrioLabels_Response);
 
+	if(!check_channel(data->channel, false)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 BootloaderHandleMessageResponse clear_rx_labels(const ClearRXLabels *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
 BootloaderHandleMessageResponse set_rx_label_configuration(const SetRXLabelConfiguration *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
@@ -192,16 +243,27 @@ BootloaderHandleMessageResponse set_rx_label_configuration(const SetRXLabelConfi
 BootloaderHandleMessageResponse get_rx_label_configuration(const GetRXLabelConfiguration *data, GetRXLabelConfiguration_Response *response) {
 	response->header.length = sizeof(GetRXLabelConfiguration_Response);
 
+	if(!check_channel(data->channel, false)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 BootloaderHandleMessageResponse read_next_frame(const ReadNextFrame *data, ReadNextFrame_Response *response) {
 	response->header.length = sizeof(ReadNextFrame_Response);
 
+	if(!check_channel(data->channel, false)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 BootloaderHandleMessageResponse set_receive_frame_callback_configuration(const SetReceiveFrameCallbackConfiguration *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
@@ -209,10 +271,17 @@ BootloaderHandleMessageResponse set_receive_frame_callback_configuration(const S
 BootloaderHandleMessageResponse get_receive_frame_callback_configuration(const GetReceiveFrameCallbackConfiguration *data, GetReceiveFrameCallbackConfiguration_Response *response) {
 	response->header.length = sizeof(GetReceiveFrameCallbackConfiguration_Response);
 
+	if(!check_channel(data->channel, false)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 BootloaderHandleMessageResponse write_frame_direct(const WriteFrameDirect *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
@@ -223,6 +292,9 @@ BootloaderHandleMessageResponse write_frame_scheduled(const WriteFrameScheduled 
 }
 
 BootloaderHandleMessageResponse set_schedule_entry(const SetScheduleEntry *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
@@ -230,10 +302,17 @@ BootloaderHandleMessageResponse set_schedule_entry(const SetScheduleEntry *data)
 BootloaderHandleMessageResponse get_schedule_entry(const GetScheduleEntry *data, GetScheduleEntry_Response *response) {
 	response->header.length = sizeof(GetScheduleEntry_Response);
 
+	if(!check_channel(data->channel, false)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntries *data) {
+	if(!check_channel(data->channel, true)) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
