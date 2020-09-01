@@ -53,18 +53,10 @@ typedef struct {
 	uint8_t config_speed;
 } PACKED ARINC429Common;
 
-#if 1
 typedef struct {
 	uint32_t data_age;
 	uint8_t timeout;
 } PACKED ARINC429RXFrame;
-#else
-typedef struct {
-	uint8_t sdi;
-	uint32_t data_age[ARINC429_RX_PRIO_LABEL_NUM];
-	uint8_t timeout[ARINC429_RX_PRIO_LABEL_NUM];
-} PACKED ARINC429RXFrame;
-#endif
 
 typedef struct {
 	uint8_t prio_enabled;

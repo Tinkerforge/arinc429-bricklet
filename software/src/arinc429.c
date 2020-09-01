@@ -99,13 +99,6 @@ void arinc429_init(void) {
 
 		for(uint16_t j = 0; j < ARINC429_RX_LABEL_NUM; j++) {
 			arinc429.rx_channel[i].label[j] = 0;
-#if 0
-			arinc429.rx_channel[i].frame[j].sdi = 0;
-			for(uint8_t k = 0; k < ARINC429_RX_PRIO_LABEL_NUM; k++) {
-				arinc429.rx_channel[i].frame[j].data_age[k] = 0;
-				arinc429.rx_channel[i].frame[j].timeout[k] = 0;
-			}
-#endif
 		}
 	}
 
