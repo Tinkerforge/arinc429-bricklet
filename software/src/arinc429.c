@@ -67,14 +67,11 @@ void arinc429_task_update_channel_mode(void) {
 		uint8_t ctrl = 0;
 		hi3593_task_read_register(HI3593_CMD_READ_TX1_CTRL, &ctrl, opcode_length[HI3593_CMD_READ_TX1_CTRL]);
 
-		logd("ctrl before: %d\n\r", ctrl);
-
 		if(arinc429.tx_channel[0].common.mode == ARINC429_CHANNEL_MODE_PASSIVE) {
 			ctrl |= (1 << 7);
 		} else {
 			ctrl &= ~(1 << 7);
 		}
-		logd("ctrl after: %d\n\r", ctrl);
 
 		if(hi3593_task_write_register(HI3593_CMD_WRITE_TX1_CTRL, &ctrl, opcode_length[HI3593_CMD_WRITE_TX1_CTRL]) == 0) {
 			if(arinc429.tx_channel[0].common.mode != ARINC429_CHANNEL_MODE_RUNNING) {
@@ -82,7 +79,6 @@ void arinc429_task_update_channel_mode(void) {
 			}
 
 			arinc429.tx_channel[0].common.mode_new = false;
-			logd("ctrl done\n\r");
 		}
 	}
 }
