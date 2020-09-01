@@ -60,9 +60,10 @@ typedef struct {
 } PACKED ARINC429RXFrame;
 
 typedef struct {
-	uint8_t prio_enabled;
+	bool prio_enabled;
 	uint8_t label[ARINC429_RX_LABEL_NUM];
 	uint8_t prio_label[ARINC429_RX_PRIO_LABEL_NUM];
+	bool    prio_label_new;
 	ARINC429RXFrame frame[ARINC429_RX_FRAME_NUM];
 	ARINC429Common common;
 } PACKED ARINC429RXChannel;

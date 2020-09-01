@@ -299,8 +299,18 @@ BootloaderHandleMessageResponse get_channel_mode(const GetChannelMode *data, Get
 }
 
 BootloaderHandleMessageResponse clear_prio_labels(const ClearPrioLabels *data) {
-	if(!check_channel(data->channel, true)) {
+	if(!check_channel(data->channel, true) || (data->channel < ARINC429_CHANNEL_RX)) {
 		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
+	if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1)) {
+		arinc429.rx_channel[0].prio_label_new = true;
+		arinc429.rx_channel[0].prio_enabled = false;
+	}
+
+	if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX2)) {
+		arinc429.rx_channel[0].prio_label_new = true;
+		arinc429.rx_channel[1].prio_enabled = false;
 	}
 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
@@ -311,6 +321,18 @@ BootloaderHandleMessageResponse set_prio_labels(const SetPrioLabels *data) {
 		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	}
 
+	if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1)) {
+		memcpy(arinc429.rx_channel[0].prio_label, data->label, 3);
+		arinc429.rx_channel[0].prio_label_new = true;
+		arinc429.rx_channel[0].prio_enabled = true;
+	}
+
+	if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX2)) {
+		memcpy(arinc429.rx_channel[1].prio_label, data->label, 3);
+		arinc429.rx_channel[1].prio_label_new = true;
+		arinc429.rx_channel[1].prio_enabled = true;
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -319,6 +341,16 @@ BootloaderHandleMessageResponse get_prio_labels(const GetPrioLabels *data, GetPr
 
 	if(!check_channel(data->channel, false)) {
 		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
+	if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1)) {
+		memcpy(response->label, arinc429.rx_channel[0].prio_label, 3);
+		response->prio_enabled = arinc429.rx_channel[0].prio_enabled;
+	}
+
+	if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX2)) {
+		memcpy(response->label, arinc429.rx_channel[1].prio_label, 3);
+		response->prio_enabled = arinc429.rx_channel[1].prio_enabled;
 	}
 
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;

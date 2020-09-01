@@ -83,6 +83,41 @@ void arinc429_task_update_channel_mode(void) {
 	}
 }
 
+void arinc429_task_update_prio_labels(void) {
+	const uint8_t reg_write_prio[2] = {HI3593_CMD_READ_RX1_PRIO1, HI3593_CMD_READ_RX2_PRIO1};
+	const uint8_t reg_write_ctrl[2] = {HI3593_CMD_WRITE_RX1_CTRL, HI3593_CMD_WRITE_RX2_CTRL};
+	const uint8_t reg_read_ctrl[2]  = {HI3593_CMD_READ_RX1_CTRL,  HI3593_CMD_READ_RX2_CTRL};
+
+	for(uint8_t i = 0; i < ARINC429_CHANNEL_RX_NUM; i++) {
+		if(arinc429.rx_channel[i].prio_label_new) {
+			if(arinc429.rx_channel[i].prio_enabled) {
+				uint8_t prio_label[3] = {
+					arinc429.rx_channel[i].prio_label[2],
+					arinc429.rx_channel[i].prio_label[1],
+					arinc429.rx_channel[i].prio_label[0],
+				};
+				hi3593_task_write_register(reg_write_prio[i], prio_label, opcode_length[reg_write_prio[i]]);
+
+				uint8_t ctrl = 0;
+				hi3593_task_read_register(reg_read_ctrl[i], &ctrl, opcode_length[reg_read_ctrl[i]]);
+
+				ctrl |= (1 << 1);
+				if(hi3593_task_write_register(reg_write_ctrl[i], &ctrl, opcode_length[reg_write_ctrl[i]]) == 0) {
+					arinc429.rx_channel[i].prio_label_new = false;
+				}
+			} else { // Clear
+				uint8_t ctrl = 0;
+				hi3593_task_read_register(reg_read_ctrl[i], &ctrl, opcode_length[reg_read_ctrl[i]]);
+
+				ctrl &= ~(1 << 1);
+				if(hi3593_task_write_register(reg_write_ctrl[i], &ctrl, opcode_length[reg_write_ctrl[i]]) == 0) {
+					arinc429.rx_channel[i].prio_label_new = false;
+				}
+			}
+		}
+	}
+}
+
 void arinc429_tick_task(void) {
 	// Reset
 	coop_task_sleep_ms(100);
@@ -95,6 +130,7 @@ void arinc429_tick_task(void) {
 	while(true) {
 		arinc429_task_update_channel_config();
 		arinc429_task_update_channel_mode();
+		arinc429_task_update_prio_labels();
 
 		coop_task_yield();
 	}
