@@ -118,6 +118,18 @@ void arinc429_task_update_prio_labels(void) {
 	}
 }
 
+void arinc429_task_buffer_check(void) {
+	// TODO
+}
+
+void arinc429_task_timeout_check(void) {
+	// TODO
+}
+
+void arinc429_task_tx_scheduler(void) {
+	// TODO
+}
+
 void arinc429_tick_task(void) {
 	// Reset
 	coop_task_sleep_ms(100);
@@ -127,10 +139,15 @@ void arinc429_tick_task(void) {
 	// Configure clock
 	uint8_t aclk = 0x00; // 1 MHz
 	hi3593_task_write_register(HI3593_CMD_WRITE_ACLK_DIV, &aclk, 1);
+
 	while(true) {
 		arinc429_task_update_channel_config();
 		arinc429_task_update_channel_mode();
 		arinc429_task_update_prio_labels();
+
+		arinc429_task_buffer_check();
+		arinc429_task_timeout_check();
+		arinc429_task_tx_scheduler();
 
 		coop_task_yield();
 	}
