@@ -140,7 +140,12 @@ BootloaderHandleMessageResponse debug_write_register_low_level(const DebugWriteR
 }
 
 BootloaderHandleMessageResponse get_capabilities(const GetCapabilities *data, GetCapabilities_Response *response) {
-	response->header.length = sizeof(GetCapabilities_Response);
+	response->header.length      = sizeof(GetCapabilities_Response);
+	response->rx_channels        = ARINC429_CHANNEL_RX_NUM;
+	response->rx_filter_frames   = ARINC429_RX_FRAME_NUM;
+	response->tx_channels        = ARINC429_CHANNEL_TX_NUM;
+	response->tx_schedule_slots  = ARINC429_TX_SLOTS_NUM;
+	response->tx_schedule_frames = ARINC429_TX_FRAME_NUM;
 
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
