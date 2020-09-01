@@ -19,16 +19,29 @@ if __name__ == "__main__":
     ipcon.connect(HOST, PORT) # Connect to brickd
     # Don't use device before ipcon is connected
 
-    a429.set_channel_configuration(a429.A429_CHANNEL_TX, a429.A429_PARITY_PARITY, a429.A429_SPEED_LS)
-    a429.set_channel_configuration(a429.A429_CHANNEL_RX, a429.A429_PARITY_PARITY, a429.A429_SPEED_LS)
+    a429.set_channel_configuration(a429.CHANNEL_TX, a429.PARITY_PARITY, a429.SPEED_LS)
+    a429.set_channel_configuration(a429.CHANNEL_RX, a429.PARITY_PARITY, a429.SPEED_LS)
 
-    print(a429.get_channel_configuration(a429.A429_CHANNEL_TX1))
-    print(a429.get_channel_configuration(a429.A429_CHANNEL_RX1))
-    print(a429.get_channel_configuration(a429.A429_CHANNEL_RX2))
+    print(a429.get_channel_configuration(a429.CHANNEL_TX1))
+    print(a429.get_channel_configuration(a429.CHANNEL_RX1))
+    print(a429.get_channel_configuration(a429.CHANNEL_RX2))
     try:
-        print(a429.get_channel_configuration(a429.A429_CHANNEL_RX)) # <-- exception expected!
+        print(a429.get_channel_configuration(a429.CHANNEL_RX)) # <-- exception expected!
     except:
-        traceback.print_exc()
+        print("exception OK")
+#        traceback.print_exc()
 
+    a429.set_channel_mode(a429.CHANNEL_TX1, a429.CHANNEL_MODE_ACTIVE)
+    print(a429.get_channel_mode(a429.CHANNEL_TX1))
+    a429.set_channel_mode(a429.CHANNEL_TX1, a429.CHANNEL_MODE_PASSIVE)
+    print(a429.get_channel_mode(a429.CHANNEL_TX1))
+    a429.set_channel_mode(a429.CHANNEL_TX1, a429.CHANNEL_MODE_PASSIVE)
+    print(a429.get_channel_mode(a429.CHANNEL_TX1))
+
+    print(a429.get_prio_labels(a429.CHANNEL_RX1))
+    a429.set_prio_labels(a429.CHANNEL_RX, [1, 2, 3])
+    print(a429.get_prio_labels(a429.CHANNEL_RX1))
+    a429.clear_prio_labels(a429.CHANNEL_RX)
+    print(a429.get_prio_labels(a429.CHANNEL_RX1))
 
     ipcon.disconnect()
