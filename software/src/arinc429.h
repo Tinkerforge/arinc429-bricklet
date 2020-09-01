@@ -45,6 +45,7 @@ typedef struct {
 	uint16_t frames_processed;
 	uint16_t frames_lost;
 	uint8_t mode;
+	bool mode_new;
 	uint8_t heartbeat_period;
 	uint8_t heartbeat_timer;
 

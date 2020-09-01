@@ -241,6 +241,29 @@ BootloaderHandleMessageResponse set_channel_mode(const SetChannelMode *data) {
 		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	}
 
+	if(data->mode > ARINC429_CHANNEL_MODE_RUNNING) {
+		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
+	if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1)) {
+		if(arinc429.tx_channel[0].common.mode != ARINC429_CHANNEL_MODE_UNINIT) {
+			arinc429.tx_channel[0].common.mode = data->mode;
+			arinc429.tx_channel[0].common.mode_new = true;
+		}
+	}
+
+	if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1)) {
+		if(arinc429.rx_channel[0].common.mode != ARINC429_CHANNEL_MODE_UNINIT) {
+			arinc429.rx_channel[0].common.mode = data->mode;
+		}
+	}
+
+	if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX2)) {
+		if(arinc429.rx_channel[1].common.mode != ARINC429_CHANNEL_MODE_UNINIT) {
+			arinc429.rx_channel[1].common.mode = data->mode;
+		}
+	}
+
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -249,6 +272,27 @@ BootloaderHandleMessageResponse get_channel_mode(const GetChannelMode *data, Get
 
 	if(!check_channel(data->channel, false)) {
 		return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+
+	switch(data->channel) {
+		case ARINC429_CHANNEL_TX1: {
+			response->mode = arinc429.tx_channel[0].common.mode;
+			break;
+		}
+
+		case ARINC429_CHANNEL_RX1: {
+			response->mode = arinc429.rx_channel[0].common.mode;
+			break;
+		}
+
+		case ARINC429_CHANNEL_RX2: {
+			response->mode = arinc429.rx_channel[1].common.mode;
+			break;
+		}
+
+		default: {
+			return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+		}
 	}
 
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;

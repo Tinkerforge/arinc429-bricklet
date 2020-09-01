@@ -61,6 +61,31 @@ void arinc429_task_update_channel_config(void) {
 		}
 	}
 }
+		
+void arinc429_task_update_channel_mode(void) {
+	if(arinc429.tx_channel[0].common.mode_new) {
+		uint8_t ctrl = 0;
+		hi3593_task_read_register(HI3593_CMD_READ_TX1_CTRL, &ctrl, opcode_length[HI3593_CMD_READ_TX1_CTRL]);
+
+		logd("ctrl before: %d\n\r", ctrl);
+
+		if(arinc429.tx_channel[0].common.mode == ARINC429_CHANNEL_MODE_PASSIVE) {
+			ctrl |= (1 << 7);
+		} else {
+			ctrl &= ~(1 << 7);
+		}
+		logd("ctrl after: %d\n\r", ctrl);
+
+		if(hi3593_task_write_register(HI3593_CMD_WRITE_TX1_CTRL, &ctrl, opcode_length[HI3593_CMD_WRITE_TX1_CTRL]) == 0) {
+			if(arinc429.tx_channel[0].common.mode != ARINC429_CHANNEL_MODE_RUNNING) {
+				arinc429.tx_channel[0].schedule_slot = 0;
+			}
+
+			arinc429.tx_channel[0].common.mode_new = false;
+			logd("ctrl done\n\r");
+		}
+	}
+}
 
 void arinc429_tick_task(void) {
 	// Reset
@@ -73,6 +98,7 @@ void arinc429_tick_task(void) {
 	hi3593_task_write_register(HI3593_CMD_WRITE_ACLK_DIV, &aclk, 1);
 	while(true) {
 		arinc429_task_update_channel_config();
+		arinc429_task_update_channel_mode();
 
 		coop_task_yield();
 	}
