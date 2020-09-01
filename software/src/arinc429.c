@@ -29,6 +29,7 @@
 
 #include <string.h>
 
+extern const int8_t opcode_length[256];
 ARINC429 arinc429;
 CoopTask arinc429_task;
 
@@ -36,17 +37,26 @@ CoopTask arinc429_task;
 void arinc429_task_update_channel_config(void) {
 	if(arinc429.tx_channel[0].common.config_new) {
 		uint8_t ctrl = (arinc429.tx_channel[0].common.config_parity << 2) | (arinc429.tx_channel[0].common.config_speed << 0);
-		if(hi3593_task_write_register(HI3593_CMD_WRITE_TX1_CTRL, &ctrl, 1) == 0) {
+		if(hi3593_task_write_register(HI3593_CMD_WRITE_TX1_CTRL, &ctrl, opcode_length[HI3593_CMD_WRITE_TX1_CTRL]) == 0) {
 			arinc429.tx_channel[0].common.config_new = false;
+			arinc429.tx_channel[0].common.mode = ARINC429_CHANNEL_MODE_ACTIVE;
 		}
 	}
 
-	const uint8_t reg[2] = {HI3593_CMD_WRITE_RX1_CTRL, HI3593_CMD_WRITE_RX2_CTRL};
+	const uint8_t reg_ctrl[2] = {HI3593_CMD_WRITE_RX1_CTRL, HI3593_CMD_WRITE_RX2_CTRL};
+	const uint8_t reg_read[2] = {HI3593_CMD_READ_RX1_FIFO, HI3593_CMD_READ_RX2_FIFO};
 	for(uint8_t i = 0; i < ARINC429_CHANNEL_RX_NUM; i++) {
 		if(arinc429.rx_channel[i].common.config_new) {
+			// Clear potential remains in RX FIFO
+			for(uint8_t j = 0; j < 32; j++) {
+				uint8_t tmp[4];
+				hi3593_task_read_register(reg_read[i], tmp, opcode_length[reg_read[i]]);
+			}
+
 			uint8_t ctrl = (arinc429.rx_channel[i].common.config_parity << 3) | (arinc429.rx_channel[i].common.config_speed << 0);
-			if(hi3593_task_write_register(reg[i], &ctrl, 1) == 0) {
+			if(hi3593_task_write_register(reg_ctrl[i], &ctrl, opcode_length[reg_ctrl[i]]) == 0) {
 				arinc429.rx_channel[i].common.config_new = false;
+				arinc429.rx_channel[0].common.mode = ARINC429_CHANNEL_MODE_ACTIVE;
 			}
 		}
 	}
