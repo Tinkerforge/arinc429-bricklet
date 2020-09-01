@@ -53,10 +53,12 @@ void arinc429_task_update_channel_config(void) {
 }
 
 void arinc429_tick_task(void) {
+	// Reset
 	coop_task_sleep_ms(100);
 	hi3593_task_write_register(HI3593_CMD_MASTER_RESET, NULL, 0);
 	coop_task_sleep_ms(100);
 
+	// Configure clock
 	uint8_t aclk = 0x00; // 1 MHz
 	hi3593_task_write_register(HI3593_CMD_WRITE_ACLK_DIV, &aclk, 1);
 	while(true) {
