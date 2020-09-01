@@ -88,11 +88,10 @@ void arinc429_init(void) {
 		arinc429.rx_channel[i].common.heartbeat_period = 0;
 		arinc429.rx_channel[i].common.heartbeat_timer = 0;
 
-		arinc429.rx_channel[i].common.config_parity = ARINC429_A429_PARITY_TRANSPARENT;
-		arinc429.rx_channel[i].common.config_speed = ARINC429_A429_SPEED_HS;
+		arinc429.rx_channel[i].common.config_parity = ARINC429_PARITY_TRANSPARENT;
+		arinc429.rx_channel[i].common.config_speed = ARINC429_SPEED_HS;
 		arinc429.rx_channel[i].common.config_new = true;
 
-		arinc429.rx_channel[i].callback_mode = ARINC429_CALLBACK_MODE_OFF;
 		arinc429.rx_channel[i].prio_enabled  = false;
 		for(uint8_t j = 0; j < ARINC429_RX_PRIO_LABEL_NUM; j++) {
 			arinc429.rx_channel[i].prio_label[j] = 0;
@@ -111,14 +110,14 @@ void arinc429_init(void) {
 	}
 
 	for(uint8_t i = 0; i < ARINC429_CHANNEL_TX_NUM; i++) {
-		arinc429.tx_channel[i].common.config_parity = ARINC429_A429_PARITY_TRANSPARENT;
-		arinc429.tx_channel[i].common.config_speed = ARINC429_A429_SPEED_HS;
+		arinc429.tx_channel[i].common.config_parity = ARINC429_PARITY_TRANSPARENT;
+		arinc429.tx_channel[i].common.config_speed = ARINC429_SPEED_HS;
 		arinc429.tx_channel[i].common.config_new = true;
 
 		arinc429.tx_channel[i].schedule_slot = 0;
 
 		for(uint16_t j = 0; j < ARINC429_TX_SLOTS_NUM; j++) {
-			arinc429.tx_channel[i].tx_slot[j].job_index = ARINC429_SCHEDULE_SLOT_ACTION_MUTE;
+			arinc429.tx_channel[i].tx_slot[j].job_index = ARINC429_SCHEDULER_JOB_MUTE;
 			arinc429.tx_channel[i].tx_slot[j].dweel = 0;
 		}
 

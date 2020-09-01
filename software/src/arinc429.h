@@ -67,7 +67,6 @@ typedef struct {
 #endif
 
 typedef struct {
-	uint8_t callback_mode;
 	uint8_t prio_enabled;
 	uint8_t label[ARINC429_RX_LABEL_NUM];
 	uint8_t prio_label[ARINC429_RX_PRIO_LABEL_NUM];
@@ -101,18 +100,5 @@ extern ARINC429 arinc429;
 
 void arinc429_init(void);
 void arinc429_tick(void);
-
-
-#define ARINC429_CHANNEL_MODE_UNINIT  0
-#define ARINC429_CHANNEL_MODE_PASSIVE 1
-#define ARINC429_CHANNEL_MODE_ACTIVE  2
-
-#define ARINC429_CALLBACK_MODE_OFF       0
-#define ARINC429_CALLBACK_MODE_ON        1
-#define ARINC429_CALLBACK_MODE_ON_CHANGE 2
-
-#define ARINC429_SCHEDULE_SLOT_ACTION_MUTE   0
-#define ARINC429_SCHEDULE_SLOT_ACTION_SINGLE 1
-#define ARINC429_SCHEDULE_SLOT_ACTION_CYCLE  2
 
 #endif
