@@ -48,14 +48,14 @@ extern const int8_t opcode_length[256];
 /* communication initialization, called from main() */
 void communication_init(void)
 {
-//	communication_callback_init();
+	communication_callback_init();
 }
 
 
 /* communication tick, called from main task */
 void communication_tick(void)
 {
-//	communication_callback_tick();
+	communication_callback_tick();
 }
 
 
