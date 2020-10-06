@@ -597,6 +597,8 @@ void arinc429_tick(void)
 
 void arinc429_tick_task(void)
 {
+	hi3593_task_init_hardware();
+
 	while(true)
 	{
 		// update channel configuration

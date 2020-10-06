@@ -30,9 +30,7 @@
 
 
 // instantiate data structure used for accessing the A429 chip
-CoopTask hi3593_task;
 HI3593   hi3593;
-
 
 /****************************************************************************/
 /* data structures                                                          */
@@ -82,18 +80,6 @@ void hi3593_tick(void)
 	// operate the RX/TX LEDs
 	led_flicker_tick(&hi3593.led_flicker_state_rx, system_timer_get_ms(), HI3593_RX_LED);
 	led_flicker_tick(&hi3593.led_flicker_state_tx, system_timer_get_ms(), HI3593_TX_LED);
-
-	// restart hi3593_task_tick()
-	coop_task_tick(&hi3593_task);
-}
-
-void hi3593_task_tick(void)
-{
-	while(true)
-	{
-		// nothing to be done
-		coop_task_yield();
-	}
 }
 
 
@@ -187,12 +173,37 @@ uint32_t hi3593_task_read_register(const uint8_t opcode, uint8_t *data, const ui
 	return ret ? 0 : 1;
 }
 
+void hi3593_task_init_hardware(void) {
+	/*** HI3593 (A429 chip) ***/
+	uint8_t  data;
+
+	// give the chip time to awake
+	coop_task_sleep_ms(100);
+
+	// do a master reset
+	hi3593_task_write_register(HI3593_CMD_MASTER_RESET,   NULL,  0);     // TODO evaluate return code
+
+	// give the chip time to restart
+	coop_task_sleep_ms(100);
+
+	// configure the clock divider
+	data =  0x00 << 1;   // 0x00 = 1 MHz
+
+	hi3593_task_write_register(HI3593_CMD_WRITE_ACLK_DIV, &data, 1);     // TODO evaluate return code
+
+	// configure the discretes
+	data =   0x0 << 6   // R2INT pulses high on reception of a valid frame any RX 2 buffer (FIFO or priority)
+	       | 0x3 << 4   // R2FLAG = high when RX2 FIFO contains >= 1 frame
+	       | 0x0 << 2   // R1INT pulses high on reception of a valid frame any RX 1 buffer (FIFO or priority)
+	       | 0x3 << 0;  // R1FLAG = high when RX1 FIFO contains >= 1 frame
+
+	hi3593_task_write_register(HI3593_CMD_WRITE_FLAG_IRQ, &data, 1);     // TODO evaluate return code
+}
+
 
 /* hardware initialization, called from main() */
 void hi3593_init(void)
 {
-	uint8_t  data;
-
 	// clear data structure
 	memset(&hi3593, 0, sizeof(HI3593));
 
@@ -234,31 +245,6 @@ void hi3593_init(void)
 	// configure RX/TX LEDs
 	hi3593.led_flicker_state_rx.config = LED_FLICKER_CONFIG_STATUS;
 	hi3593.led_flicker_state_tx.config = LED_FLICKER_CONFIG_STATUS;
-
-
-	/*** HI3593 (A429 chip) ***/
-
-	// give the chip time to awake
-	coop_task_sleep_ms(100);
-
-	// do a master reset
-	hi3593_task_write_register(HI3593_CMD_MASTER_RESET,   NULL,  0);     // TODO evaluate return code
-
-	// give the chip time to restart
-	coop_task_sleep_ms(100);
-
-	// configure the clock divider
-	data =  0x00 << 1;   // 0x00 = 1 MHz
-
-	hi3593_task_write_register(HI3593_CMD_WRITE_ACLK_DIV, &data, 1);     // TODO evaluate return code
-
-	// configure the discretes
-	data =   0x0 << 6   // R2INT pulses high on reception of a valid frame any RX 2 buffer (FIFO or priority)
-	       | 0x3 << 4   // R2FLAG = high when RX2 FIFO contains >= 1 frame
-	       | 0x0 << 2   // R1INT pulses high on reception of a valid frame any RX 1 buffer (FIFO or priority)
-	       | 0x3 << 0;  // R1FLAG = high when RX1 FIFO contains >= 1 frame
-
-	hi3593_task_write_register(HI3593_CMD_WRITE_FLAG_IRQ, &data, 1);     // TODO evaluate return code
 
 	// done
 	return;

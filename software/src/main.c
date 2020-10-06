@@ -35,7 +35,6 @@
 
 
 extern CoopTask arinc429_task;   // TODO does not work when put into arinc429.h - why?
-extern CoopTask hi3593_task;     // TODO does not work when put into hi3593.h   - why?
 
 CoopTask main_task;
 
@@ -85,7 +84,6 @@ int main(void)
 
 	// initialize tasks
 	coop_task_init(&main_task,     main_tick_task    );
-	coop_task_init(&hi3593_task,   hi3593_task_tick  );
 	coop_task_init(&arinc429_task, arinc429_tick_task);
 
 	// main-loop

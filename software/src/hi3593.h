@@ -57,11 +57,10 @@ extern XMC_GPIO_PORT_t  *const hi3593_input_ports[HI3593_INPUT_PINS_NUM];
 
 void hi3593_init(void);
 void hi3593_tick(void);
-void hi3593_task_tick(void);
 
 uint32_t hi3593_task_write_register(const uint8_t opcode, const uint8_t *data, const uint8_t length);
 uint32_t hi3593_task_read_register (const uint8_t opcode,       uint8_t *data, const uint8_t length);
-
+void hi3593_task_init_hardware(void);
 
 /****************************************************************************/
 /* DEFINES                                                                  */
