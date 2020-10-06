@@ -540,7 +540,7 @@ BootloaderHandleMessageResponse get_schedule_entry                  (const GetSc
 bool handle_callbacks  (void);
 
 #define COMMUNICATION_CALLBACK_TICK_WAIT_MS  1
-#define COMMUNICATION_CALLBACK_HANDLER_NUM   2
+#define COMMUNICATION_CALLBACK_HANDLER_NUM   1
 
 #define COMMUNICATION_CALLBACK_LIST_INIT \
 	handle_callbacks, \
