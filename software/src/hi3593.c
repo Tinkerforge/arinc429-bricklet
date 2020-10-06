@@ -28,8 +28,17 @@
 
 #include "opcode_length.inc"
 
+
+// instantiate data structure used for accessing the A429 chip
 CoopTask hi3593_task;
-HI3593 hi3593;
+HI3593   hi3593;
+
+
+/****************************************************************************/
+/* data structures                                                          */
+/****************************************************************************/
+
+// pin and port numbers to interface with the discrete signals of the A429 chip
 
 const uint8_t hi3593_input_pins[HI3593_INPUT_PINS_NUM] = {
 	HI3593_MB11_PIN,
@@ -61,38 +70,40 @@ XMC_GPIO_PORT_t *const hi3593_input_ports[HI3593_INPUT_PINS_NUM] = {
 	HI3593_TFULL_PORT
 };
 
-uint32_t hi3593_task_write_register(const uint8_t opcode, const uint8_t *data, const uint8_t length) {
-	uint8_t opcode_and_data[257] = {opcode};
-	memcpy(opcode_and_data+1, data, length);
-	const bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);
-	// TODO: Check ret, handle different error cases
 
-	// For now we blink the TX LED when we write a register
-	// Later we can also blink this with actual TX data transfer
-	hi3593.led_flicker_state_tx.counter += length;
-	return ret ? 0 : 1;
+/****************************************************************************/
+/* task & tick functions                                                    */
+/****************************************************************************/
+
+/* hardware interface tick */
+/* called from main-loop   */
+void hi3593_tick(void)
+{
+	// operate the RX/TX LEDs
+	led_flicker_tick(&hi3593.led_flicker_state_rx, system_timer_get_ms(), HI3593_RX_LED);
+	led_flicker_tick(&hi3593.led_flicker_state_tx, system_timer_get_ms(), HI3593_TX_LED);
+
+	// restart hi3593_task_tick()
+	coop_task_tick(&hi3593_task);
 }
 
-uint32_t hi3593_task_read_register(const uint8_t opcode, uint8_t *data, const uint8_t length) {
-	uint8_t opcode_and_data[257] = {(1 << 7) | opcode};
-	const bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);
-	// TODO: Check ret, handle different error cases
-
-	memcpy(data, opcode_and_data+1, length);
-
-	// For now we blink the RX LED when we read a register
-	// Later we can also blink this with actual RX data transfer
-	hi3593.led_flicker_state_rx.counter += length;
-	return ret ? 0 : 1;
-}
-
-void hi3593_task_tick(void) {
-	while(true) {
+void hi3593_task_tick(void)
+{
+	while(true)
+	{
+		// nothing to be done
 		coop_task_yield();
 	}
 }
 
-static void hi3593_init_spi(void) {
+
+/****************************************************************************/
+/* local functions                                                          */
+/****************************************************************************/
+
+/* SPI bus initialization */
+static void hi3593_init_spi(void)
+{
 	hi3593.spi_fifo.channel             = HI3593_USIC_SPI;
 	hi3593.spi_fifo.baudrate            = HI3593_SPI_BAUDRATE;
 
@@ -123,43 +134,135 @@ static void hi3593_init_spi(void) {
 	hi3593.spi_fifo.miso_source         = HI3593_MISO_SOURCE;
 
 	spi_fifo_init(&hi3593.spi_fifo);
+
+	return;
 }
 
-void hi3593_init(void) {
+
+/****************************************************************************/
+/* global functions                                                         */
+/****************************************************************************/
+
+/* SPI write access to A429 chip */
+uint32_t hi3593_task_write_register(const uint8_t opcode, const uint8_t *data, const uint8_t length)
+{
+	// create buffer and load opcode
+	uint8_t opcode_and_data[257] = {opcode};               // TODO size 257 needed? can reduce?
+
+	// copy data to buffer
+	memcpy(opcode_and_data+1, data, length);
+
+	// execute SPI transfer
+	const bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);
+
+	// TODO check ret, handle different error cases
+
+	// for now we blink the TX LED when we write a register,
+	// later we can blink with actual TX data transfers only
+	hi3593.led_flicker_state_tx.counter += length;
+
+	// done
+	return ret ? 0 : 1;
+}
+
+
+/* SPI read access to A429 chip */
+uint32_t hi3593_task_read_register(const uint8_t opcode, uint8_t *data, const uint8_t length)
+{
+	// create buffer and load opcode
+	uint8_t opcode_and_data[257] = {(1 << 7) | opcode};    // TODO size 257 needed? can reduce?
+
+	// execute SPI transfer
+	const bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);
+
+	// TODO check ret, handle different error cases
+
+	memcpy(data, opcode_and_data+1, length);
+
+	// for now we blink the RX LED when we read a register,
+	// later we can blink with actual RX data transfers only
+	hi3593.led_flicker_state_rx.counter += length;
+
+	// done
+	return ret ? 0 : 1;
+}
+
+
+/* hardware initialization, called from main() */
+void hi3593_init(void)
+{
+	uint8_t  data;
+
+	// clear data structure
 	memset(&hi3593, 0, sizeof(HI3593));
 
+
+	/*** XMC (host) ***/
+
+	// initialize SPI interface
 	hi3593_init_spi();
 
-	const XMC_GPIO_CONFIG_t pin_config_input = {
+	// prepare configuration data for input pins
+	const XMC_GPIO_CONFIG_t pin_config_input =
+	{
 		.mode             = XMC_GPIO_MODE_INPUT_TRISTATE,
 		.input_hysteresis = XMC_GPIO_INPUT_HYSTERESIS_STANDARD
 	};
 
-	for(uint8_t i = 0; i < HI3593_INPUT_PINS_NUM; i++) {
+	// configure input pins
+	for(uint8_t i = 0; i < HI3593_INPUT_PINS_NUM; i++)
+	{
 		XMC_GPIO_Init(hi3593_input_ports[i], hi3593_input_pins[i], &pin_config_input);
 	}
 
-	const XMC_GPIO_CONFIG_t pin_config_output = {
+	// prepare configuration data for output pins
+	const XMC_GPIO_CONFIG_t pin_config_output =
+	{
 		.mode         = XMC_GPIO_MODE_OUTPUT_PUSH_PULL,
 		.output_level = XMC_GPIO_OUTPUT_LEVEL_LOW,
 	};
+
+	// configure output pins
 	XMC_GPIO_Init(HI3593_RESET,  &pin_config_output);
 	XMC_GPIO_Init(HI3593_RX_LED, &pin_config_output);
 	XMC_GPIO_Init(HI3593_TX_LED, &pin_config_output);
 
-	// Create 1MHz Clock on HI3593 CLOCK Pin
+	// create 1 MHz clock on HI3593 CLOCK pin
 	ccu4_pwm_init(HI3593_CLOCK, HI3593_CLOCK_SLICE_NUMBER, HI3593_CLOCK_PERIOD-1);
 	ccu4_pwm_set_duty_cycle(HI3593_CLOCK_SLICE_NUMBER, HI3593_CLOCK_PERIOD/2);
 
+	// configure RX/TX LEDs
 	hi3593.led_flicker_state_rx.config = LED_FLICKER_CONFIG_STATUS;
 	hi3593.led_flicker_state_tx.config = LED_FLICKER_CONFIG_STATUS;
 
-	coop_task_init(&hi3593_task, hi3593_task_tick);
+
+	/*** HI3593 (A429 chip) ***/
+
+	// give the chip time to awake
+	coop_task_sleep_ms(100);
+
+	// do a master reset
+	hi3593_task_write_register(HI3593_CMD_MASTER_RESET,   NULL,  0);     // TODO evaluate return code
+
+	// give the chip time to restart
+	coop_task_sleep_ms(100);
+
+	// configure the clock divider
+	data =  0x00 << 1;   // 0x00 = 1 MHz
+
+	hi3593_task_write_register(HI3593_CMD_WRITE_ACLK_DIV, &data, 1);     // TODO evaluate return code
+
+	// configure the discretes
+	data =   0x0 << 6   // R2INT pulses high on reception of a valid frame any RX 2 buffer (FIFO or priority)
+	       | 0x3 << 4   // R2FLAG = high when RX2 FIFO contains >= 1 frame
+	       | 0x0 << 2   // R1INT pulses high on reception of a valid frame any RX 1 buffer (FIFO or priority)
+	       | 0x3 << 0;  // R1FLAG = high when RX1 FIFO contains >= 1 frame
+
+	hi3593_task_write_register(HI3593_CMD_WRITE_FLAG_IRQ, &data, 1);     // TODO evaluate return code
+
+	// done
+	return;
 }
 
-void hi3593_tick(void) {
-	led_flicker_tick(&hi3593.led_flicker_state_rx, system_timer_get_ms(), HI3593_RX_LED);
-	led_flicker_tick(&hi3593.led_flicker_state_tx, system_timer_get_ms(), HI3593_TX_LED);
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-	coop_task_tick(&hi3593_task);
-}

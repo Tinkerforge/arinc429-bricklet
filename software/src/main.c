@@ -28,33 +28,78 @@
 #include "bricklib2/hal/system_timer/system_timer.h"
 #include "bricklib2/logging/logging.h"
 #include "bricklib2/os/coop_task.h"
-#include "communication.h"
-#include "hi3593.h"
-#include "arinc429.h"
 
-// We run communication and bootloader tick in task,
-// so we can yield from within a communication getter/setter.
+#include "arinc429.h"
+#include "hi3593.h"
+#include "communication.h"
+
+
+extern CoopTask arinc429_task;   // TODO does not work when put into arinc429.h - why?
+extern CoopTask hi3593_task;     // TODO does not work when put into hi3593.h   - why?
+
 CoopTask main_task;
-void main_tick_task(void) {
-	while(true) {
+
+
+/****************************************************************************/
+/* task & tick functions                                                    */
+/****************************************************************************/
+
+void main_tick(void)
+{
+	// restart main_tick_task()
+	coop_task_tick(&main_task);
+}
+
+void main_tick_task(void)
+{
+	// we run bootloader and communication tick in main task, so
+	// we can yield from within a communication getter/setter                // TODO probably not needed!?!
+
+	while(true)
+	{
 		bootloader_tick();
 		communication_tick();
 		coop_task_yield();
 	}
 }
 
-int main(void) {
+
+/****************************************************************************/
+/* MAIN()                                                                   */
+/****************************************************************************/
+
+int main(void)
+{
+	// start logging service
 	logging_init();
 	logd("Start ARINC429 Bricklet\n\r");
 
+	// initialize communication
 	communication_init();
-	coop_task_init(&main_task, main_tick_task);
+
+	// initialize hardware interface
 	hi3593_init();
+
+	// initialize A429 operations
 	arinc429_init();
 
-	while(true) {
-		coop_task_tick(&main_task);
+	// initialize tasks
+	coop_task_init(&main_task,     main_tick_task    );
+	coop_task_init(&hi3593_task,   hi3593_task_tick  );
+	coop_task_init(&arinc429_task, arinc429_tick_task);
+
+	// main-loop
+	while(true)
+	{
+		// do main jobs
+		main_tick();
+
+		// do hardware jobs
 		hi3593_tick();
+
+		// do A429 jobs
 		arinc429_tick();
 	}
 }
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
