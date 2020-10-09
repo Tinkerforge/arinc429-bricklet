@@ -173,8 +173,10 @@ uint32_t hi3593_task_read_register(const uint8_t opcode, uint8_t *data, const ui
 	return ret ? 0 : 1;
 }
 
-void hi3593_task_init_hardware(void) {
-	/*** HI3593 (A429 chip) ***/
+
+/* HI3593 (A429 chip) hardware initialization, called from arinc429_tick_task() */
+void hi3593_task_init_hardware(void)
+{
 	uint8_t  data;
 
 	// give the chip time to awake
@@ -201,14 +203,11 @@ void hi3593_task_init_hardware(void) {
 }
 
 
-/* hardware initialization, called from main() */
+/* XMC (host) hardware initialization, called from main() */
 void hi3593_init(void)
 {
 	// clear data structure
 	memset(&hi3593, 0, sizeof(HI3593));
-
-
-	/*** XMC (host) ***/
 
 	// initialize SPI interface
 	hi3593_init_spi();

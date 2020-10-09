@@ -184,13 +184,13 @@ typedef struct
 {
 	// channels
 	ARINC429TXChannel tx_channel[ARINC429_TX_CHANNELS_NUM]; // 2.636 TX channels
-	ARINC429RXChannel rx_channel[ARINC429_RX_CHANNELS_NUM]; // 6.192 RX channels
+	ARINC429RXChannel rx_channel[ARINC429_RX_CHANNELS_NUM]; // 7.216 RX channels
 
 	// callbacks
 	ARINC429Heartbeat heartbeat;                            //     8 bricklet heartbeat
 	ARINC429Callback  callback;                             //   516 callback queue
 }                                                           // =====
-PACKED ARINC429;                                            // 9.352 byte (~ 9 kByte)
+PACKED ARINC429;                                            //10.376 byte (~ 10 kByte)
 
 
 /****************************************************************************/

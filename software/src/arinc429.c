@@ -597,6 +597,7 @@ void arinc429_tick(void)
 
 void arinc429_tick_task(void)
 {
+	// initialize A429 chip
 	hi3593_task_init_hardware();
 
 	while(true)

@@ -86,15 +86,15 @@ BootloaderHandleMessageResponse handle_message(const void *message, void *respon
 		case FID_SET_PRIO_LABELS                      : return set_prio_labels                      (message          );
 		case FID_GET_PRIO_LABELS                      : return get_prio_labels                      (message, response);
 
-		case FID_CLEAR_ALL_RX_LABEL_FILTERS           : return clear_all_rx_filters                 (message          );
-		case FID_CLEAR_RX_LABEL_FILTER                : return clear_rx_filter                      (message          );
-		case FID_SET_RX_LABEL_FILTER                  : return set_rx_filter                        (message          );
-		case FID_GET_RX_LABEL_FILTER                  : return get_rx_filter                        (message, response);
+		case FID_CLEAR_ALL_RX_FILTERS                 : return clear_all_rx_filters                 (message          );
+		case FID_CLEAR_RX_FILTER                      : return clear_rx_filter                      (message          );
+		case FID_SET_RX_FILTER                        : return set_rx_filter                        (message          );
+		case FID_GET_RX_FILTER                        : return get_rx_filter                        (message, response);
 
-		case FID_READ_NEXT_FRAME                      : return read_frame                           (message, response);
+		case FID_READ_FRAME                           : return read_frame                           (message, response);
 
-		case FID_SET_RECEIVE_CALLBACK_CONFIGURATION   : return set_rx_callback_configuration        (message          );
-		case FID_GET_RECEIVE_CALLBACK_CONFIGURATION   : return get_rx_callback_configuration        (message, response);
+		case FID_SET_RX_CALLBACK_CONFIGURATION        : return set_rx_callback_configuration        (message          );
+		case FID_GET_RX_CALLBACK_CONFIGURATION        : return get_rx_callback_configuration        (message, response);
 
 		case FID_WRITE_FRAME_DIRECT                   : return write_frame_direct                   (message          );
 		case FID_WRITE_FRAME_SCHEDULED                : return write_frame_scheduled                (message          );
@@ -724,7 +724,7 @@ BootloaderHandleMessageResponse get_prio_labels(const GetPrioLabels          *da
 
 
 /* clear all RX filters */
-BootloaderHandleMessageResponse clear_all_rx_filters(const ClearAllRXLabelFilters *data)
+BootloaderHandleMessageResponse clear_all_rx_filters(const ClearAllRXFilters *data)
 {
 	// check channel parameter, abort if invalid
 	if(!check_channel(data->channel, GROUP_RX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
@@ -755,7 +755,7 @@ BootloaderHandleMessageResponse clear_all_rx_filters(const ClearAllRXLabelFilter
 
 
 /* clear one RX filter */
-BootloaderHandleMessageResponse clear_rx_filter(const ClearRXLabelFilter *data)
+BootloaderHandleMessageResponse clear_rx_filter(const ClearRXFilter *data)
 {
 	// check parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_RX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
@@ -778,7 +778,7 @@ BootloaderHandleMessageResponse clear_rx_filter(const ClearRXLabelFilter *data)
 
 
 /* set a RX filter configuration */
-BootloaderHandleMessageResponse set_rx_filter(const SetRXLabelFilter *data)
+BootloaderHandleMessageResponse set_rx_filter(const SetRXFilter *data)
 {
 	bool  success = true;
 
@@ -804,15 +804,15 @@ BootloaderHandleMessageResponse set_rx_filter(const SetRXLabelFilter *data)
 
 
 /* get a RX filter configuration */
-BootloaderHandleMessageResponse get_rx_filter(const GetRXLabelFilter          *data,
-                                                    GetRXLabelFilter_Response *response)
+BootloaderHandleMessageResponse get_rx_filter(const GetRXFilter          *data,
+                                                    GetRXFilter_Response *response)
 {
 	ARINC429RXChannel *channel;
 	uint16_t           index;
 	uint8_t            buffer;
 
 	// prepare response
-	response->header.length = sizeof(GetRXLabelFilter_Response);
+	response->header.length = sizeof(GetRXFilter_Response);
 
 	// switch on selected channel
 	switch(data->channel)
