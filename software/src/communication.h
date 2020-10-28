@@ -45,83 +45,85 @@ void communication_init(void);
 
 // return / error codes
 
-#define ARINC429_RW_ERROR_OK              0  // operation executed successfully
-#define ARINC429_RW_ERROR_NO_WRITE        1  // error: opcode invalid for write access
-#define ARINC429_RW_ERROR_NO_READ         2  // error: opcode invalid for read  access
-#define ARINC429_RW_ERROR_INVALID_OP_CODE 3  // error: opcode invalid (undefined)
-#define ARINC429_RW_ERROR_INVALID_LENGTH  4  // error: invalid number of data bytes
-#define ARINC429_RW_ERROR_SPI             5  // error: SPI communication failed
+#define ARINC429_RW_ERROR_OK               0  // operation executed successfully
+#define ARINC429_RW_ERROR_NO_WRITE         1  // error: opcode invalid for write access
+#define ARINC429_RW_ERROR_NO_READ          2  // error: opcode invalid for read  access
+#define ARINC429_RW_ERROR_INVALID_OP_CODE  3  // error: opcode invalid (undefined)
+#define ARINC429_RW_ERROR_INVALID_LENGTH   4  // error: invalid number of data bytes
+#define ARINC429_RW_ERROR_SPI              5  // error: SPI communication failed
 
 
 // user parameter encodings
 
-#define ARINC429_CHANNEL_TX               0  // all TX channels
-#define ARINC429_CHANNEL_TX1              1  // TX channel #1
-#define ARINC429_CHANNEL_TX2              2  // not used
-#define ARINC429_CHANNEL_TX3              3  // ...
-#define ARINC429_CHANNEL_TX4              4  // ...
-#define ARINC429_CHANNEL_TX5              5  // ...
-#define ARINC429_CHANNEL_TX6              6  // ...
-#define ARINC429_CHANNEL_TX7              7  // ...
-#define ARINC429_CHANNEL_TX8              8  // ...
-#define ARINC429_CHANNEL_TX9              9  // ...
-#define ARINC429_CHANNEL_TX10            10  // ...
-#define ARINC429_CHANNEL_TX11            11  // ...
-#define ARINC429_CHANNEL_TX12            12  // ...
-#define ARINC429_CHANNEL_RX              32  // all TX channels
-#define ARINC429_CHANNEL_RX1             33  // RX channel #1
-#define ARINC429_CHANNEL_RX2             34  // RX channel #2
-#define ARINC429_CHANNEL_RX3             35  // not used
-#define ARINC429_CHANNEL_RX4             36  // ...
-#define ARINC429_CHANNEL_RX5             37  // ...
-#define ARINC429_CHANNEL_RX6             38  // ...
-#define ARINC429_CHANNEL_RX7             39  // ...
-#define ARINC429_CHANNEL_RX8             40  // ...
-#define ARINC429_CHANNEL_RX9             41  // ...
-#define ARINC429_CHANNEL_RX10            42  // ...
-#define ARINC429_CHANNEL_RX11            43  // ...
-#define ARINC429_CHANNEL_RX12            44  // ...
+#define ARINC429_CHANNEL_TX                0  // all TX channels
+#define ARINC429_CHANNEL_TX1               1  // TX channel #1
+#define ARINC429_CHANNEL_TX2               2  // not used
+#define ARINC429_CHANNEL_TX3               3  // ...
+#define ARINC429_CHANNEL_TX4               4  // ...
+#define ARINC429_CHANNEL_TX5               5  // ...
+#define ARINC429_CHANNEL_TX6               6  // ...
+#define ARINC429_CHANNEL_TX7               7  // ...
+#define ARINC429_CHANNEL_TX8               8  // ...
+#define ARINC429_CHANNEL_TX9               9  // ...
+#define ARINC429_CHANNEL_TX10             10  // ...
+#define ARINC429_CHANNEL_TX11             11  // ...
+#define ARINC429_CHANNEL_TX12             12  // ...
+#define ARINC429_CHANNEL_RX               32  // all TX channels
+#define ARINC429_CHANNEL_RX1              33  // RX channel #1
+#define ARINC429_CHANNEL_RX2              34  // RX channel #2
+#define ARINC429_CHANNEL_RX3              35  // not used
+#define ARINC429_CHANNEL_RX4              36  // ...
+#define ARINC429_CHANNEL_RX5              37  // ...
+#define ARINC429_CHANNEL_RX6              38  // ...
+#define ARINC429_CHANNEL_RX7              39  // ...
+#define ARINC429_CHANNEL_RX8              40  // ...
+#define ARINC429_CHANNEL_RX9              41  // ...
+#define ARINC429_CHANNEL_RX10             42  // ...
+#define ARINC429_CHANNEL_RX11             43  // ...
+#define ARINC429_CHANNEL_RX12             44  // ...
 
-#define ARINC429_SDI0                     0  // SDI bits used for address extension, SDI 0
-#define ARINC429_SDI1                     1  // SDI bits used for address extension, SDI 1
-#define ARINC429_SDI2                     2  // SDI bits used for address extension, SDI 2
-#define ARINC429_SDI3                     3  // SDI bits used for address extension, SDI 3
-#define ARINC429_SDI_DATA                 4  // SDI bits used for data
+#define ARINC429_SDI0                      0  // SDI bits used for address extension, SDI 0
+#define ARINC429_SDI1                      1  // SDI bits used for address extension, SDI 1
+#define ARINC429_SDI2                      2  // SDI bits used for address extension, SDI 2
+#define ARINC429_SDI3                      3  // SDI bits used for address extension, SDI 3
+#define ARINC429_SDI_DATA                  4  // SDI bits used for data
 
-#define ARINC429_PARITY_DATA              0  // parity bit is used for data or parity provided by user
-#define ARINC429_PARITY_AUTO              1  // parity bit is set automatically
+#define ARINC429_PARITY_DATA               0  // parity bit is used for data or parity provided by user
+#define ARINC429_PARITY_AUTO               1  // parity bit is set automatically
 
-#define ARINC429_SPEED_HS                 0  // wire speed is high-speed
-#define ARINC429_SPEED_LS                 1  // wire speed is  low-speed
+#define ARINC429_SPEED_HS                  0  // wire speed is high-speed
+#define ARINC429_SPEED_LS                  1  // wire speed is  low-speed
 
-#define ARINC429_CHANNEL_MODE_PASSIVE     0  // initialized, but inactive (output stage of TX channels in HI-Z)
-#define ARINC429_CHANNEL_MODE_ACTIVE      1  // initialized, ready to receive (RX channels) / ready for direct transmit (TX channels)
-#define ARINC429_CHANNEL_MODE_RUN         2  // TX channels only: active and scheduler running
+#define ARINC429_CHANNEL_MODE_PASSIVE      0  // initialized, but inactive (output stage of TX channels in HI-Z)
+#define ARINC429_CHANNEL_MODE_ACTIVE       1  // initialized, ready to receive (RX channels) / ready for direct transmit (TX channels)
+#define ARINC429_CHANNEL_MODE_RUN          2  // TX channels only: active and scheduler running
 
-#define ARINC429_PRIORITY_DISABLED        0  // RX priority buffers disabled
-#define ARINC429_PRIORITY_ENABLED         1  // RX priority buffers enabled
+#define ARINC429_PRIORITY_DISABLED         0  // RX priority buffers disabled
+#define ARINC429_PRIORITY_ENABLED          1  // RX priority buffers enabled
 
-#define ARINC429_FRAME_STATUS_UPDATE      0  // new or updated frame received
-#define ARINC429_FRAME_STATUS_TIMEOUT     1  // frame is overdue (frame data are last data received)
+#define ARINC429_FRAME_STATUS_UPDATE       0  // new or updated frame received
+#define ARINC429_FRAME_STATUS_TIMEOUT      1  // frame is overdue (frame data are last data received)
 
-#define ARINC429_SCHEDULER_JOB_EMPTY      0  // scheduler job code for 'empty' : no transmit, no dwell
-#define ARINC429_SCHEDULER_JOB_MUTE       1  // scheduler job code for 'mute'  : no transmit, do dwell
-#define ARINC429_SCHEDULER_JOB_SINGLE     2  // scheduler job code for 'single': send frame once       and dwell
-#define ARINC429_SCHEDULER_JOB_CYCLIC     3  // scheduler job code for 'cyclic': send frame repeatedly and dwell
+#define ARINC429_SCHEDULER_JOB_SKIP        0  // scheduler job code for 'skip'  : no transmit, no   dwell
+#define ARINC429_SCHEDULER_JOB_DWELL       1  // scheduler job code for 'dwell' : no transmit, only dwell
+#define ARINC429_SCHEDULER_JOB_SINGLE      2  // scheduler job code for 'single': send frame once       and dwell
+#define ARINC429_SCHEDULER_JOB_CYCLIC      3  // scheduler job code for 'cyclic': send frame repeatedly and dwell
+#define ARINC429_SCHEDULER_JOB_RETRANS_RX1 4 // scheduler job code for retransmission of a a frame received on RX1
+#define ARINC429_SCHEDULER_JOB_RETRANS_RX2 5 // scheduler job code for retransmission of a a frame received on RX2
 
-#define ARINC429_A429_MODE_NORMAL         0  // high-level A429 operations are executed
-#define ARINC429_A429_MODE_DEBUG          1  // high-level A429 operations are stopped for low-level debug access
+#define ARINC429_A429_MODE_NORMAL          0  // high-level A429 operations are executed
+#define ARINC429_A429_MODE_DEBUG           1  // high-level A429 operations are stopped for low-level debug access
 
-#define ARINC429_CALLBACK_JOB_NONE        0  // callback job code for 'nothing to do'
-#define ARINC429_CALLBACK_JOB_HEARTBEAT   1  // callback job code for 'heartbeat'
-#define ARINC429_CALLBACK_JOB_FRAME_RX1   2  // callback job code for 'new frame', bit 0 = 0 -> channel 1
-#define ARINC429_CALLBACK_JOB_FRAME_RX2   3  // callback job code for 'new frame', bit 0 = 1 -> channel 2
-#define ARINC429_CALLBACK_JOB_TIMEOUT_RX1 4  // callback job code for 'timeout',   bit 0 = 0 -> channel 1
-#define ARINC429_CALLBACK_JOB_TIMEOUT_RX2 5  // callback job code for 'timeout',   bit 0 = 0 -> channel 2
+#define ARINC429_CALLBACK_JOB_NONE         0  // callback job code for 'nothing to do'
+#define ARINC429_CALLBACK_JOB_HEARTBEAT    1  // callback job code for 'heartbeat'
+#define ARINC429_CALLBACK_JOB_FRAME_RX1    2  // callback job code for 'new frame', bit 0 = 0 -> channel 1
+#define ARINC429_CALLBACK_JOB_FRAME_RX2    3  // callback job code for 'new frame', bit 0 = 1 -> channel 2
+#define ARINC429_CALLBACK_JOB_TIMEOUT_RX1  4  // callback job code for 'timeout',   bit 0 = 0 -> channel 1
+#define ARINC429_CALLBACK_JOB_TIMEOUT_RX2  5  // callback job code for 'timeout',   bit 0 = 0 -> channel 2
 
-#define ARINC429_CALLBACK_OFF             0  // callback disabled
-#define ARINC429_CALLBACK_ON              1  // callback enabled
-#define ARINC429_CALLBACK_ON_CHANGE       2  // callback enabled, on change only
+#define ARINC429_CALLBACK_OFF              0  // callback disabled
+#define ARINC429_CALLBACK_ON               1  // callback enabled
+#define ARINC429_CALLBACK_ON_CHANGE        2  // callback enabled, on change only
 
 
 // system parameter encodings

@@ -363,8 +363,9 @@ next_task:
 		jobcode = (job_frame & ARINC429_TX_JOB_JOBCODE_MASK) >> ARINC429_TX_JOB_JOBCODE_POS;
 		index   = (job_frame & ARINC429_TX_JOB_INDEX_MASK  ) >> ARINC429_TX_JOB_INDEX_POS;
 
-		// is it an empty task?
-		if(jobcode == ARINC429_SCHEDULER_JOB_EMPTY)
+		// is it an empty task or a completed single transmit?
+		if(    ((jobcode == ARINC429_SCHEDULER_JOB_SKIP  )                                                               )
+		    || ((jobcode == ARINC429_SCHEDULER_JOB_SINGLE) && (channel->frame_buffer[index] == ARINC429_INELIGIBLE_FRAME)) )
 		{
 			// yes, reduce the budget for empty task skips
 			skip_empty_budget--;
@@ -391,8 +392,37 @@ next_task:
 				uint8_t frame[4];  // frame broken down into individual bytes
 				uint8_t data[4];   // transfer buffer for hi3593_write_register()
 
-				// yes, get the frame to be transmitted and convert it from uint32_t to an array of uint8_t
-				memcpy(frame, &(channel->frame_buffer[index]), 4);
+				// select frame source
+				if(jobcode < ARINC429_SCHEDULER_JOB_RETRANS_RX1)
+				{
+					// transmit from TX frame buffer, convert the frame from uint32_t to an array of uint8_t
+					memcpy(frame, &(channel->frame_buffer[index]), 4);
+				}
+				else
+				{
+					// retransmit from RX1 or RX2, get the channel index
+					uint8_t channel_index = jobcode - ARINC429_SCHEDULER_JOB_RETRANS_RX1;
+
+					// does the SDI/label combination have a filter assigned?
+					if(!check_sw_filter_map(channel_index, index))
+					{
+						// no, skip transmission and proceed to dwelling
+						goto next_dwell;
+					}
+
+					// retrieve the buffer index
+					uint8_t buffer_index = arinc429.rx_channel[channel_index].frame_filter[index];
+
+					// frame not received yet or in timeout?
+					if(arinc429.rx_channel[channel_index].frame_buffer[buffer_index].frame_age > 60000)
+					{
+						// yes, skip transmission and proceed to dwelling
+						goto next_dwell;
+					}
+
+					// get the frame and convert it from uint32_t to an array of uint8_t
+					memcpy(frame, &(arinc429.rx_channel[channel_index].frame_buffer[buffer_index].frame), 4);
+				}
 
 				// reverse the byte sequence (the A429 chip wants the highest byte first)
 				data[0] = frame[3];
@@ -412,8 +442,8 @@ next_task:
 				// shall do a single transmit only?
 				if(jobcode == ARINC429_SCHEDULER_JOB_SINGLE)
 				{
-					// yes, update the task table - change the job to 'mute'
-					channel->job_frame[channel->task_index] = (ARINC429_SCHEDULER_JOB_MUTE << ARINC429_TX_JOB_JOBCODE_POS) | (index << ARINC429_TX_JOB_INDEX_POS);
+					// yes, update the frame table - ineligible frame
+					channel->frame_buffer[index] = ARINC429_INELIGIBLE_FRAME;
 				}
 			}
 			else
@@ -422,6 +452,8 @@ next_task:
 				(channel->common.frames_lost_curr)++;
 			}
 		}
+
+next_dwell:
 
 		// does the current task have a zero dwell time?
 		if(dwell_time == 0)
@@ -538,8 +570,8 @@ void arinc429_task_receive_frames(void)
 				if((age > 60000) || (buffer->frame_age > 60000))  age = 60000;
 
 				// shall send a callback?
-				if(    ((channel->common.callback_mode == ARINC429_CALLBACK_ON       )                                )
-				    || ((channel->common.callback_mode == ARINC429_CALLBACK_ON_CHANGE) && (buffer->frame != new_frame)) )
+				if(    ((channel->common.callback_mode == ARINC429_CALLBACK_ON       )                                                                 )
+				    || ((channel->common.callback_mode == ARINC429_CALLBACK_ON_CHANGE) && ((buffer->frame != new_frame) || (buffer->frame_age > 60000))) )
 				{
 					// yes, enqueue a new frame message, success?
 					if(!enqueue_message(ARINC429_CALLBACK_JOB_FRAME_RX1 + i, curr_time, buffer_index))
@@ -762,7 +794,7 @@ void arinc429_init_data(void)
 		// scheduler task table
 		for(uint16_t j = 0; j < ARINC429_TX_TASKS_NUM; j++)
 		{
-			channel->job_frame[j]             = ARINC429_SCHEDULER_JOB_EMPTY << ARINC429_TX_JOB_JOBCODE_POS;
+			channel->job_frame[j]             = ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS;
 			channel->dwell_time[j]            = 0;
 		}
 

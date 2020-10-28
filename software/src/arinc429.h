@@ -84,9 +84,10 @@
 #define ARINC429_UPDATE_OPERATING_MODE   (1 << 2)           // request update of operating mode
 #define ARINC429_UPDATE_CALLBACK_MODE    (1 << 3)           // request update of callback  mode
 
-// internal argument encodings
+// internal encodings
 #define ARINC429_SET                     0                  // set   a filter in a filter map
 #define ARINC429_CLEAR                   1                  // clear a filter in a filter map
+#define ARINC429_INELIGIBLE_FRAME        0                  // value of a TX frame that will not be transmitted by the scheduler
 
 
 /****************************************************************************/
@@ -163,7 +164,7 @@ typedef struct
 	uint32_t         last_job_dwell_time;                   //      4 dwell     time of the last task
 	uint16_t         job_frame[ARINC429_TX_TASKS_NUM];      //  1.024 bits 15-12: action (mute, single, cyclic), bits 11-0: index frame[] table
 	uint8_t          dwell_time[ARINC429_TX_TASKS_NUM];     //    512 waiting time in ms before advancing to the next job
-	uint32_t         frame_buffer[ARINC429_TX_BUFFER_NUM];  //  1.024 scheduled frames table
+	uint32_t         frame_buffer[ARINC429_TX_BUFFER_NUM];  //  1.024 scheduled TX frames
 }                                                           //  =====
 PACKED ARINC429TXChannel;                                   //  2.640 byte
 

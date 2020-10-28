@@ -869,8 +869,8 @@ BootloaderHandleMessageResponse set_rx_standard_filters(const SetRXStandardFilte
 				channel->hardware_filter[j] = ~0;
 			}
 
-            // link the frame buffers
-            for(uint16_t j = 0; j < ARINC429_RX_FILTERS_NUM; j++)
+			// link the frame buffers
+			for(uint16_t j = 0; j < ARINC429_RX_FILTERS_NUM; j++)
 			{
 				channel->frame_filter[j] = (uint8_t)(j & 0x00FF);
 			}
@@ -1014,7 +1014,7 @@ BootloaderHandleMessageResponse read_frame(const ReadFrame          *data,
                                                  ReadFrame_Response *response)
 {
 	ARINC429RXChannel *channel;
-    uint8_t            channel_index;
+	uint8_t            channel_index;
 
 	// prepare the response
 	response->header.length = sizeof(ReadFrame_Response);
@@ -1193,7 +1193,7 @@ BootloaderHandleMessageResponse write_frame_scheduled(const WriteFrameScheduled 
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1 + i))
 		{
-			// yes, store frame to the TX frame table
+			// yes, store frame in the TX frame table
 			arinc429.tx_channel[i].frame_buffer[data->frame_index] = data->frame;
 		}
 	}
@@ -1224,11 +1224,11 @@ BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntrie
 			// clear the task entries (this can be done while the scheduler is running)
 			for(uint16_t j = data->task_index_first; j <= data->task_index_last; j++)
 			{
-				// is the task already 'empty'?
-				if((channel->job_frame[j] & ARINC429_TX_JOB_JOBCODE_MASK) != (ARINC429_SCHEDULER_JOB_EMPTY << ARINC429_TX_JOB_JOBCODE_POS))
+				// is the task already unused?
+				if((channel->job_frame[j] & ARINC429_TX_JOB_JOBCODE_MASK) != (ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS))
 				{
-					// no, set the task to 'empty'
-					channel->job_frame[j] = ARINC429_SCHEDULER_JOB_EMPTY << ARINC429_TX_JOB_JOBCODE_POS;
+					// no, set the task to 'skip' aka unused
+					channel->job_frame[j] = ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS;
 
 					// decrement the number of used task entries
 					channel->scheduler_tasks_used--;
@@ -1246,11 +1246,22 @@ BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntrie
 BootloaderHandleMessageResponse set_schedule_entry(const SetScheduleEntry *data)
 {
 	// check the parameters, abort if invalid
-	if(!check_channel(data->channel, GROUP_TX)             )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-	if( data->task_index   >= ARINC429_TX_TASKS_NUM        )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-	if( data->job          >  ARINC429_SCHEDULER_JOB_CYCLIC)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-	if( data->frame_index  >= ARINC429_TX_BUFFER_NUM       )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-	if( data->dwell_time   >  250                          )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if(!check_channel(data->channel, GROUP_TX)                  )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if( data->task_index   >= ARINC429_TX_TASKS_NUM             )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if( data->job          >  ARINC429_SCHEDULER_JOB_RETRANS_RX2)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if( data->dwell_time   >  250                               )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
+	// check frame index parameter
+	if(data->job < ARINC429_SCHEDULER_JOB_RETRANS_RX1)
+	{
+		// abort on invalid TX frame table index
+		if(data->frame_index >= ARINC429_TX_BUFFER_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
+	else
+	{
+		// abort on invalid extended label (SDI + label)
+		if(data->frame_index >  0x03FF                )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	}
 
 	// do all TX channels
 	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
@@ -1262,7 +1273,7 @@ BootloaderHandleMessageResponse set_schedule_entry(const SetScheduleEntry *data)
 			ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
 
 			// is the task in use already?
-			if((channel->job_frame[data->task_index] & ARINC429_TX_JOB_JOBCODE_MASK) == (ARINC429_SCHEDULER_JOB_EMPTY << ARINC429_TX_JOB_JOBCODE_POS))
+			if((channel->job_frame[data->task_index] & ARINC429_TX_JOB_JOBCODE_MASK) == (ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS))
 			{
 				// no, increment the number of used task entries
 				channel->scheduler_tasks_used++;
@@ -1303,8 +1314,8 @@ BootloaderHandleMessageResponse get_schedule_entry(const GetScheduleEntry       
 	response->job         = (channel->job_frame[data->task_index] & ARINC429_TX_JOB_JOBCODE_MASK) >> ARINC429_TX_JOB_JOBCODE_POS;
 	response->frame_index = (channel->job_frame[data->task_index] & ARINC429_TX_JOB_INDEX_MASK  ) >> ARINC429_TX_JOB_INDEX_POS;
 
-	response->dwell_time  = (response->job == ARINC429_SCHEDULER_JOB_EMPTY) ? 0 : channel->dwell_time  [data->task_index     ];
-	response->frame       = (response->job == ARINC429_SCHEDULER_JOB_EMPTY) ? 0 : channel->frame_buffer[response->frame_index];
+	response->dwell_time  = (response->job == ARINC429_SCHEDULER_JOB_SKIP) ? 0 : channel->dwell_time  [data->task_index     ];
+	response->frame       = (response->job == ARINC429_SCHEDULER_JOB_SKIP) ? 0 : channel->frame_buffer[response->frame_index];
 
 	// done, send the response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
