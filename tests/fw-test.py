@@ -171,22 +171,22 @@ if __name__ == "__main__":
     a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_ACTIVE)
 
     ret = a429.get_channel_mode(channel = a429.CHANNEL_TX1)
-    
+
     print('TX channel mode: ', ret)
 
 
     #################################################################
     # Test  5 - TX - direct transmit
     #################################################################
-    
+
     print('\nTX direct Transmit')
     print('------------------')
 
     # define frame (label 1, no sdi, data = 0)
     frame = 1
-    
+
     a429.write_frame_direct(channel = a429.CHANNEL_TX, frame = frame)
-    
+
     print('transmitted frame:', frame)
 
 
@@ -268,7 +268,7 @@ if __name__ == "__main__":
 
     # check scheduler is running
     ret = a429.get_channel_mode(channel = a429.CHANNEL_TX1)
-  
+
     if ret == a429.CHANNEL_MODE_RUN : print('TX Channel Mode: run')
     else                            : print('ERROR: channel not in mode RUN')
 
@@ -312,10 +312,10 @@ if __name__ == "__main__":
 
     # register callback function
     a429.register_callback(a429.CALLBACK_FRAME_MESSAGE, frame_cb)
-    
+
     # configure callback
     a429.set_rx_callback_configuration(channel = a429.CHANNEL_RX, enabled = True, value_has_to_change = False, timeout = 1000)
-    
+
     print('RX  callback configured')
 
     # configuration read-back
@@ -329,13 +329,13 @@ if __name__ == "__main__":
     #################################################################
     # Test  9 - general - heartbeat
     #################################################################
-    
+
     print('\nHeartbeat')
     print('---------')
 
     # register callback function
     a429.register_callback(a429.CALLBACK_HEARTBEAT, heartbeat_cb)
-    
+
     # configure callback
     a429.set_heartbeat_callback_configuration(period = 1, value_has_to_change = False)
 
@@ -343,7 +343,7 @@ if __name__ == "__main__":
 
     # configuration read-back
     ret = a429.get_heartbeat_callback_configuration()
-    
+
     print('heartbeat read-back: period =', ret.period, 'value-has-to-change =', ret.value_has_to_change)
 
     input("\npress <enter> key to continue...\n\n") # use raw_input() in Python 2
@@ -361,7 +361,7 @@ if __name__ == "__main__":
 
     print('Callback for RX1 changed to on-change-only')
 
- 
+
     #################################################################
     # Test 11- RX - timeout
     #################################################################
@@ -386,11 +386,6 @@ if __name__ == "__main__":
     print('\nClean-up')
     print('--------')
 
-    # set mode to passive
-    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_PASSIVE)
-    a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_PASSIVE)
-    print('switched all channels to passive mode')
-
     # clear TX schedule
     a429.clear_schedule_entries(channel = a429.CHANNEL_TX, task_index_first = 0, task_index_last = 511)
     print('cleared complete TX schedule')
@@ -411,28 +406,154 @@ if __name__ == "__main__":
     print('----------------')
 
     a429.set_rx_standard_filters(channel = a429.CHANNEL_RX)
-    
+
     # read capabilities (resource usage)
     ret = a429.get_capabilities()
-    
+
     print('standard RX filters set:')
     print('RX Frame Filters total/used:', ret.rx_total_frame_filters,'/', ret.rx_used_frame_filters  )
 
-    # clear all RX filters, re-read capabilities
-    a429.clear_all_rx_filters(channel = a429.CHANNEL_RX)
-    ret = a429.get_capabilities()
+    # callbacks on RX1 only
+    a429.set_rx_callback_configuration(channel = a429.CHANNEL_RX1, enabled = True,  value_has_to_change = False, timeout = 10000)
+    a429.set_rx_callback_configuration(channel = a429.CHANNEL_RX2, enabled = False, value_has_to_change = True,  timeout = 10000)
+    print('\nCallsbacks on RX1 only, 10 sec timeout')
 
-    print('\ncleared all RX filters:')
-    print('RX Frame Filters total/used:', ret.rx_total_frame_filters,'/', ret.rx_used_frame_filters  )
+    # reset statistics counters
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_PASSIVE)
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_ACTIVE )
+    a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_PASSIVE)
+    a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_ACTIVE )
+    print('cleared statistics counters')
+
+    # send frames with labels 0..255
+    print('\nsending frames with labels 0..255:') 
+
+    for label in range(0, 256) :
+        a429.write_frame_direct(channel = a429.CHANNEL_TX, frame = label)
+        time.sleep(0.003)  # a frame takes 2.88 ms to transmit 
+
+    time.sleep(2)
+    print('...done')
+
+
+    #################################################################
+    # Test 14 - schedule with single transmits
+    #################################################################
+
+    print('\nscheduled single-transmits')
+    print('--------------------------')
+
+    # create the schedule
+    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
+                            task_index  = 0,                         \
+                            job         = a429.SCHEDULER_JOB_SINGLE, \
+                            frame_index = 0,                         \
+                            dwell_time  = 0)
+
+    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
+                            task_index  = 1,                         \
+                            job         = a429.SCHEDULER_JOB_DWELL,  \
+                            frame_index = 0,                         \
+                            dwell_time  = 100)
+
+    # clear the TX buffer (frames with value 0 will not be transmitted in JOB_SINGLE mode)
+    a429.write_frame_scheduled(channel = a429.CHANNEL_TX, frame_index = 0, frame = 0)
+
+    # start scheduler & clear statistics counters
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_PASSIVE)
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_RUN    )
+    a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_PASSIVE)
+    a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_ACTIVE )
+    print('scheduler is set up and started, statistics counters are cleared')
+
+    print('waiting 5 seconds...')
+    time.sleep(5)
+
+    # write 1st frame
+    a429.write_frame_scheduled(channel = a429.CHANNEL_TX, frame_index = 0, frame = 1)
+    print('\nFrame with label 1 is programmed')
+
+    print('waiting 5 seconds...')
+    time.sleep(5)
+
+    # write 2nd frame
+    a429.write_frame_scheduled(channel = a429.CHANNEL_TX, frame_index = 0, frame = 2)
+    print('\nFrame with label 2 is programmed')
+
+    print('waiting 5 seconds...')
+    time.sleep(5)
+
+    # stop scheduler
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_ACTIVE)
+    print('scheduler stopped')
+
+
+    #################################################################
+    # Test 15 - schedule with retransmits from RX1
+    #################################################################
+
+    print('\nscheduled retransmit')
+    print('--------------------')
+
+    # change schedule to retransmit
+    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,                \
+                            task_index  = 0,                              \
+                            job         = a429.SCHEDULER_JOB_RETRANS_RX1, \
+                            frame_index = 10,                             \
+                            dwell_time  = 0)
+
+    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
+                            task_index  = 1,                         \
+                            job         = a429.SCHEDULER_JOB_DWELL,  \
+                            frame_index = 0,                         \
+                            dwell_time  = 200)
+
+    print('scheduler is set up for a retransmit of label 10 received on RX1')
+
+    # start scheduler & clear statistics counters
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_PASSIVE)
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_RUN    )
+    a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_PASSIVE)
+    a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_ACTIVE )
+    print('scheduler started, statistics counters are cleared')
+
+    print('waiting 5 seconds...')
+    time.sleep(5)
+
+    # send some other label
+    a429.write_frame_direct(channel = a429.CHANNEL_TX, frame = 20)
+    print('\nsent a frame with label 20, waiting 5 seconds...')
+    time.sleep(5)
+
+    # send triggering label
+    a429.write_frame_direct(channel = a429.CHANNEL_TX, frame = 10)
+    print('\nsent a frame with label 10, shall trigger the retransmit:')
+    time.sleep(5)
 
 
     #################################################################
     # finish
     #################################################################
 
+    print('\nclean-up')
+    print('--------')
+
+    # clear all RX filters
+    a429.clear_all_rx_filters(channel = a429.CHANNEL_RX)
+    print('cleared all RX filters')
+
+    # clear TX schedule
+    a429.clear_schedule_entries(channel = a429.CHANNEL_TX, task_index_first = 0, task_index_last = 511)
+    print('cleared complete TX schedule')
+
+    # set mode to passive
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_PASSIVE)
+    a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_PASSIVE)
+    print('switched all channels to passive mode')
+
     # disconnect
     ipcon.disconnect()
 
     # all done
-    print('\ndone.\n')
+    print('\nall tests done.\n')
 
