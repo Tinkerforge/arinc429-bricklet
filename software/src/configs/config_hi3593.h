@@ -56,12 +56,12 @@
 #define HI3593_MISO_SOURCE            0b001 // DX0B
 
 
-#define HI3593_TX_LED                 P0_6
-#define HI3593_TX_LED_PORT            XMC_GPIO_PORT0
-#define HI3593_TX_LED_PIN             6
-#define HI3593_RX_LED                 P0_8
+#define HI3593_RX_LED                 P0_6
 #define HI3593_RX_LED_PORT            XMC_GPIO_PORT0
-#define HI3593_RX_LED_PIN             8
+#define HI3593_RX_LED_PIN             6
+#define HI3593_TX_LED                 P0_8
+#define HI3593_TX_LED_PORT            XMC_GPIO_PORT0
+#define HI3593_TX_LED_PIN             8
 
 #define HI3593_CLOCK                  P0_5
 #define HI3593_CLOCK_SLICE_NUMBER     0
