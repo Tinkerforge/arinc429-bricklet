@@ -33,8 +33,12 @@
 #include "hi3593.h"
 #include "communication.h"
 
+extern CoopTask arinc429_task;
 
-extern CoopTask arinc429_task;   // TODO does not work when put into arinc429.h - why?
+
+/****************************************************************************/
+/* data structures                                                          */
+/****************************************************************************/
 
 CoopTask main_task;
 
@@ -51,13 +55,15 @@ void main_tick(void)
 
 void main_tick_task(void)
 {
-	// we run bootloader and communication tick in main task, so
-	// we can yield from within a communication getter/setter                // TODO probably not needed!?!
-
 	while(true)
 	{
+		// housekeeping
 		bootloader_tick();
+
+		// communication
 		communication_tick();
+
+		// done for now
 		coop_task_yield();
 	}
 }
@@ -69,35 +75,33 @@ void main_tick_task(void)
 
 int main(void)
 {
-	// start logging service
-	logging_init();
-	logd("Start ARINC429 Bricklet\n\r");
+//	// start logging service
+//	logging_init();
+//	logd("Start ARINC429 Bricklet\n\r");
 
 	// initialize communication
 	communication_init();
-
-	// initialize hardware interface
-	hi3593_init();
-
-	// initialize A429 operations
-	arinc429_init();
 
 	// initialize tasks
 	coop_task_init(&main_task,     main_tick_task    );
 	coop_task_init(&arinc429_task, arinc429_tick_task);
 
+	// set initial operating mode
+	arinc429.system.operating_mode = ARINC429_A429_MODE_NORMAL;
+
+	// set initial system requests
+	arinc429.system.change_request = 0xFF;  // do all
+
 	// main-loop
 	while(true)
 	{
-		// do main jobs
+		// do housekeeping & communication
 		main_tick();
 
-		// do hardware jobs
-		hi3593_tick();
-
-		// do A429 jobs
+		// do A429 specific operations
 		arinc429_tick();
 	}
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+

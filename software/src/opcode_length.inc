@@ -1,6 +1,6 @@
 const int8_t opcode_length[256] = {
 //  length // opcode
-     0,    // 0x0    // READ
+     0,    // 0x0    // WRITE
     -1,    // 0x1
     -1,    // 0x2
     -1,    // 0x3
@@ -40,7 +40,7 @@ const int8_t opcode_length[256] = {
     -1,    // 0x25
     -1,    // 0x26
     -1,    // 0x27
-     32,    // 0x28
+     32,   // 0x28
     -1,    // 0x29
     -1,    // 0x2A
     -1,    // 0x2B
@@ -128,7 +128,7 @@ const int8_t opcode_length[256] = {
     -1,    // 0x7D
     -1,    // 0x7E
     -1,    // 0x7F
-     1,    // 0x80    // WRITE
+     1,    // 0x80    // READ
     -1,    // 0x81
     -1,    // 0x82
     -1,    // 0x83
@@ -204,7 +204,7 @@ const int8_t opcode_length[256] = {
     -1,    // 0xC9
     -1,    // 0xCA
     -1,    // 0xCB
-    -1,    // 0xCC
+     3,    // 0xCC
     -1,    // 0xCD
     -1,    // 0xCE
     -1,    // 0xCF

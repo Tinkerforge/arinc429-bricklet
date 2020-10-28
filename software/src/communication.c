@@ -30,15 +30,17 @@
 
 #include "xmc_gpio.h"
 
-
 extern const int8_t opcode_length[256];
 
+
+/****************************************************************************/
+/* defines                                                                  */
+/****************************************************************************/
 
 // labels used for checking channel parameter
 #define GROUP_TX   (1 << 0)               // check for TX, TX1
 #define GROUP_RX   (1 << 1)               // check for RX, RX1, RX2
 #define GROUP_ALL  (GROUP_TX | GROUP_RX)  // check for all of above
-
 
 
 /****************************************************************************/
@@ -51,7 +53,6 @@ void communication_init(void)
 	communication_callback_init();
 }
 
-
 /* communication tick, called from main task */
 void communication_tick(void)
 {
@@ -63,7 +64,7 @@ void communication_tick(void)
 /* message dispatcher                                                       */
 /****************************************************************************/
 
-BootloaderHandleMessageResponse handle_message(const void *message, void *response)      // %%%  thread C
+BootloaderHandleMessageResponse handle_message(const void *message, void *response)
 {
 	switch(tfp_get_fid_from_message(message))
 	{
@@ -82,19 +83,16 @@ BootloaderHandleMessageResponse handle_message(const void *message, void *respon
 		case FID_SET_CHANNEL_MODE                     : return set_channel_mode                     (message          );
 		case FID_GET_CHANNEL_MODE                     : return get_channel_mode                     (message, response);
 
-		case FID_CLEAR_PRIO_LABELS                    : return clear_prio_labels                    (message          );
-		case FID_SET_PRIO_LABELS                      : return set_prio_labels                      (message          );
-		case FID_GET_PRIO_LABELS                      : return get_prio_labels                      (message, response);
-
 		case FID_CLEAR_ALL_RX_FILTERS                 : return clear_all_rx_filters                 (message          );
-		case FID_CLEAR_RX_FILTER                      : return clear_rx_filter                      (message          );
-		case FID_SET_RX_FILTER                        : return set_rx_filter                        (message          );
+		case FID_CLEAR_RX_FILTER                      : return clear_rx_filter                      (message, response);
+		case FID_SET_RX_STANDARD_FILTERS              : return set_rx_standard_filters              (message          );
+		case FID_SET_RX_FILTER                        : return set_rx_filter                        (message, response);
 		case FID_GET_RX_FILTER                        : return get_rx_filter                        (message, response);
 
 		case FID_READ_FRAME                           : return read_frame                           (message, response);
 
-		case FID_SET_RX_CALLBACK_CONFIGURATION        : return set_rx_callback_configuration        (message          );
-		case FID_GET_RX_CALLBACK_CONFIGURATION        : return get_rx_callback_configuration        (message, response);
+		case FID_SET_RECEIVE_CALLBACK_CONFIGURATION   : return set_rx_callback_configuration        (message          );
+		case FID_GET_RECEIVE_CALLBACK_CONFIGURATION   : return get_rx_callback_configuration        (message, response);
 
 		case FID_WRITE_FRAME_DIRECT                   : return write_frame_direct                   (message          );
 		case FID_WRITE_FRAME_SCHEDULED                : return write_frame_scheduled                (message          );
@@ -102,6 +100,8 @@ BootloaderHandleMessageResponse handle_message(const void *message, void *respon
 		case FID_CLEAR_SCHEDULE_ENTRIES               : return clear_schedule_entries               (message          );
 		case FID_SET_SCHEDULE_ENTRY                   : return set_schedule_entry                   (message          );
 		case FID_GET_SCHEDULE_ENTRY                   : return get_schedule_entry                   (message, response);
+
+		case FID_RESET_A429                           : return reset_a429                           (message          );
 
 		default                                       : return HANDLE_MESSAGE_RESPONSE_NOT_SUPPORTED;
 	}
@@ -137,50 +137,42 @@ static bool check_channel(const uint8_t channel, const uint8_t group)
 }
 
 
-/* clear a RX filter and free the frame buffer if applicable */
-/* helper function to clear_rx_filter()                      */
-void clear_rx_filter_helper(uint8_t channel_index, uint8_t label, uint8_t sdi)
+/* check the software filter map for a filter assignment */
+bool check_sw_filter_map(uint8_t channel_index, uint16_t ext_label)
 {
-	ARINC429RXChannel *channel;
-	uint16_t           index;
-	uint8_t            buffer;
+	// get the lower 5 bits from the extended label (SDI + label)
+	uint16_t ext_label_lo = (ext_label & 0x001F) >> 0;
+
+	// get the upper 5 bits from the extended label
+	uint16_t ext_label_hi = (ext_label & 0x03E0) >> 5;
+
+	// get the map word
+	uint32_t map = arinc429.rx_channel[channel_index].frame_filter_map[ext_label_hi];
+
+	// check if there is a filter assigned
+	if(map & (1 << ext_label_lo)) return true;
+	else                          return false;
+}
 
 
-	// get pointer to channel
-	channel = &(arinc429.rx_channel[channel_index]);
+/* update the software filter map                        */
+void update_sw_filter_map(uint8_t channel_index, uint16_t ext_label, uint8_t task)
+{
+	// get the lower 5 bits from the extended label (SDI + label)
+	uint16_t ext_label_lo = (ext_label & 0x001F) >> 0;
 
-	// compute filter index from SDI and label, replacing SDI_DATA by SDI 0
-	index = ((sdi & 0x03) << 8) | label;
+	// get the upper 5 bits from the extended label
+	uint16_t ext_label_hi = (ext_label & 0x03E0) >> 5;
 
-	// retrieve buffer index
-	buffer = channel->frame_filter[index];
+	// get a pointer to the respective byte in the map
+	uint32_t *map = &(arinc429.rx_channel[channel_index].frame_filter_map[ext_label_hi]);
 
-	// disable the filter
-	channel->frame_filter[index] = ARINC429_RX_FILTER_UNUSED;
-
-	// SDI set to data?
-	if(sdi == ARINC429_SDI_DATA)
+	// modify the filter map
+	switch(task)
 	{
-		// yes, disable the filters for the remaining 3 SDI values
-		channel->frame_filter[index + (1 << 8)] = ARINC429_RX_FILTER_UNUSED;
-		channel->frame_filter[index + (2 << 8)] = ARINC429_RX_FILTER_UNUSED;
-		channel->frame_filter[index + (3 << 8)] = ARINC429_RX_FILTER_UNUSED;
-
-		// free the frame buffer
-		channel->frame_buffer[buffer].frame_age = ARINC429_RX_BUFFER_UNUSED;
-	}
-	else
-	{
-		// no, is the buffer used by any of the other SDI values?
-		// (the own filter is already set to ARINC429_RX_FILTER_UNUSED)
-		if(    (channel->frame_filter[label + (0 << 8)] != buffer)
-		    && (channel->frame_filter[label + (1 << 8)] != buffer)
-		    && (channel->frame_filter[label + (2 << 8)] != buffer)
-		    && (channel->frame_filter[label + (3 << 8)] != buffer) )
-		{
-			// no, can free the frame buffer
-			channel->frame_buffer[buffer].frame_age = ARINC429_RX_BUFFER_UNUSED;
-		}
+		case ARINC429_SET   : *map |=  (1 << ext_label_lo); break; // set   filter -> set   respective bit
+		case ARINC429_CLEAR : *map &= ~(1 << ext_label_lo); break; // clear filter -> clear respective bit
+		default             :                               break; // unknown task, do nothing
 	}
 
 	// done
@@ -188,27 +180,147 @@ void clear_rx_filter_helper(uint8_t channel_index, uint8_t label, uint8_t sdi)
 }
 
 
-/* find a free storage location in the RX frame buffer */
-/* helper function for set_rx_filter_helper()          */
-bool find_free_rx_frame_buffer(uint8_t channel_index, uint8_t *buffer)
+/* update the hardware filter map                        */
+void update_hw_filter_map(uint8_t channel_index, uint8_t label, uint8_t task)
 {
-	uint8_t  buffer_index = 0;
+	// get the lower 3 bits from the label
+	uint8_t label_lo = (label & 0x07) >> 0;
 
-	// scan frame buffers for an unused buffer
-	do
+	// get the upper 5 bits from the label
+	uint8_t label_hi = (label & 0xF8) >> 3;
+
+	// get a pointer to the respective byte in the map (lowest index is highest byte)
+	uint8_t *map = &(arinc429.rx_channel[channel_index].hardware_filter[31 - label_hi]);
+
+	// modify the filter map
+	switch(task)
 	{
-		// buffer at index unused?
-		if(arinc429.rx_channel[channel_index].frame_buffer[buffer_index].frame_age == ARINC429_RX_BUFFER_UNUSED)
+		case ARINC429_SET   : *map |=  (1 << label_lo); break; // set   filter -> set   respective bit
+		case ARINC429_CLEAR : *map &= ~(1 << label_lo); break; // clear filter -> clear respective bit
+		default             :                           break; // unknown task, do nothing
+	}
+
+	// done
+	return;
+}
+
+
+/* clear a RX filter and free the frame buffer if applicable */
+/* helper function to clear_rx_filter()                      */
+bool clear_rx_filter_helper(uint8_t channel_index, uint8_t label, uint8_t sdi)
+{
+	uint16_t  ext_label;
+	uint8_t   buffer_index;
+
+	// get a pointer to the channel
+	ARINC429RXChannel *channel = &(arinc429.rx_channel[channel_index]);
+
+	// compute the filter index from the given SDI and label, thereby replace SDI_DATA by SDI 0
+	ext_label = ((sdi & 0x03) << 8) | label;
+
+	// abort if the SDI/label combination does not have a filter assigned
+	if(!check_sw_filter_map(channel_index, ext_label)) return false;
+
+	// get the assigned frame buffer index
+	buffer_index = channel->frame_filter[ext_label];
+
+	// shall remove a SDI_DATA filter?
+	if(sdi == ARINC429_SDI_DATA)
+	{
+		// check if the filter is a SDI_DATA filter, i.e. are the filters
+		// for all SDI values enabled and point to the same frame buffer?
+		if(    (check_sw_filter_map(channel_index, (0 << 8) | label)   )
+		    && (check_sw_filter_map(channel_index, (1 << 8) | label)   )
+		    && (check_sw_filter_map(channel_index, (2 << 8) | label)   )
+		    && (check_sw_filter_map(channel_index, (3 << 8) | label)   )
+		    && (channel->frame_filter[(0 << 8) | label] == buffer_index)
+		    && (channel->frame_filter[(1 << 8) | label] == buffer_index)
+		    && (channel->frame_filter[(2 << 8) | label] == buffer_index)
+		    && (channel->frame_filter[(3 << 8) | label] == buffer_index) )
 		{
-			// yes, export buffer index and signal success
-			*buffer = buffer_index;
+			// yes, disable the software filter for all SDI values
+			update_sw_filter_map(channel_index, (0 << 8) | label, ARINC429_CLEAR);
+			update_sw_filter_map(channel_index, (1 << 8) | label, ARINC429_CLEAR);
+			update_sw_filter_map(channel_index, (2 << 8) | label, ARINC429_CLEAR);
+			update_sw_filter_map(channel_index, (3 << 8) | label, ARINC429_CLEAR);
+
+			// disable the hardware filter
+			update_hw_filter_map(channel_index, label, ARINC429_CLEAR);
+
+			// free the frame buffer
+			channel->frame_buffer[buffer_index].frame_age = ARINC429_RX_BUFFER_UNUSED;
+
+			// done, filter successfully removed
 			return true;
 		}
+		else
+		{
+			// no, it is not a SDI_DATA filter, the filter was not removed
+			return false;
+		}
 	}
-	while(++buffer_index < (ARINC429_RX_BUFFER_NUM - 1));
+	else
+	{
+		// check if the filter is a single SDI filter, i.e. is the frame
+		// buffer not used by any enabled filter for other SDI values?
+		if(    ((sdi == 0) || (!check_sw_filter_map(channel_index, (0 << 8) | label)) || (channel->frame_filter[(0 << 8) | label] != buffer_index))
+		    && ((sdi == 1) || (!check_sw_filter_map(channel_index, (1 << 8) | label)) || (channel->frame_filter[(1 << 8) | label] != buffer_index))
+		    && ((sdi == 2) || (!check_sw_filter_map(channel_index, (2 << 8) | label)) || (channel->frame_filter[(2 << 8) | label] != buffer_index))
+		    && ((sdi == 3) || (!check_sw_filter_map(channel_index, (3 << 8) | label)) || (channel->frame_filter[(3 << 8) | label] != buffer_index)) )
+		{
+			//yes, remove the software filter for the given SDI
+			update_sw_filter_map(channel_index, ext_label, ARINC429_CLEAR);
 
-	// signal no free buffer found
+			// can the hardware filter be removed, i.e. is there no filter set for any SDI?
+			if(    (check_sw_filter_map(channel_index, (0 << 8) | label))
+				&& (check_sw_filter_map(channel_index, (1 << 8) | label))
+				&& (check_sw_filter_map(channel_index, (2 << 8) | label))
+				&& (check_sw_filter_map(channel_index, (3 << 8) | label)) )
+			{
+				// yes, remove the hardware filter
+				update_hw_filter_map(channel_index, label, ARINC429_CLEAR);
+			}
+
+			// free the frame buffer
+			channel->frame_buffer[buffer_index].frame_age = ARINC429_RX_BUFFER_UNUSED;
+
+			// done, filter successfully removed
+			return true;
+		}
+		else
+		{
+			// no, it is not a single SDI filter, the filter was not removed
+			return false;
+		}
+	}
+
+	// never get here
 	return false;
+}
+
+
+/* find a free storage location in the RX frame buffer */
+/* helper function for set_rx_filter_helper()          */
+uint8_t find_free_rx_frame_buffer(uint8_t channel_index)
+{
+
+	ARINC429RXChannel *channel = &(arinc429.rx_channel[channel_index]);
+	uint8_t            index   = 0;
+
+	// scan the frame buffers for an unused buffer
+	do
+	{
+		// is this buffer unused?
+		if(channel->frame_buffer[index].frame_age == ARINC429_RX_BUFFER_UNUSED)
+		{
+			// yes, found a free buffer
+			break;
+		}
+	}
+	while(++index < (ARINC429_RX_BUFFER_NUM - 1));
+
+	// return the index of the buffer found (or ARINC429_RX_BUFFER_NUM - 1)
+	return index;
 }
 
 
@@ -216,74 +328,85 @@ bool find_free_rx_frame_buffer(uint8_t channel_index, uint8_t *buffer)
 /* helper function for set_rx_filter() */
 bool set_rx_filter_helper(uint8_t channel_index, uint8_t label, uint8_t sdi)
 {
-	ARINC429RXChannel *channel;
-	uint8_t           *filter;    // pointer to filter
-	uint16_t           index;     // index to frame_filter[]
-	uint8_t            buffer;    // index to frame_buffer[]
+	uint8_t   buffer_index;
 
-	// compute filter index from SDI and label, replacing SDI_DATA by SDI 0
-	index = ((sdi & 0x03) << 8) | label;
+	// abort if all frame buffers are in use already
+	if(arinc429.rx_channel[channel_index].frame_buffers_used == ARINC429_RX_BUFFER_NUM) return false;
 
-	// get pointers to channel and filter
-	channel = &(arinc429.rx_channel[channel_index]);
-	filter  = &(channel->frame_filter[index]);
+	// get a pointer to the channel
+	ARINC429RXChannel *channel = &(arinc429.rx_channel[channel_index]);
 
-	// retrieve currently assigned buffer
-	buffer = *filter;
+	// find a free frame buffer
+	buffer_index = find_free_rx_frame_buffer(channel_index);
 
-	// does the filter already have a frame buffer assigned?
-	if(buffer == ARINC429_RX_FILTER_UNUSED)
+	// initialize the frame buffer
+	channel->frame_buffer[buffer_index].frame        = 0;
+	channel->frame_buffer[buffer_index].frame_age    = ARINC429_RX_BUFFER_EMPTY;
+	channel->frame_buffer[buffer_index].last_rx_time = 0;
+
+	// shall create a SDI_DATA filter?
+	if(sdi == ARINC429_SDI_DATA)
 	{
-		// no, find a free frame buffer, abort if none found
-		if(find_free_rx_frame_buffer(channel_index, &buffer) == false) return false;
+		// does the SDI_DATA filter not exist yet, i.e. are the
+		// software filters for all SDI values disabled up to now?
+		if(    (!check_sw_filter_map(channel_index, (0 << 8) | label))
+		    && (!check_sw_filter_map(channel_index, (1 << 8) | label))
+		    && (!check_sw_filter_map(channel_index, (2 << 8) | label))
+		    && (!check_sw_filter_map(channel_index, (3 << 8) | label)) )
+		{
+			// yes, assign the filters for all SDI values the new frame buffer
+			channel->frame_filter[(0 << 8) | label] = buffer_index;
+			channel->frame_filter[(1 << 8) | label] = buffer_index;
+			channel->frame_filter[(2 << 8) | label] = buffer_index;
+			channel->frame_filter[(3 << 8) | label] = buffer_index;
+
+			// activate the software filters
+			update_sw_filter_map(channel_index, (0 << 8) | label, ARINC429_SET);
+			update_sw_filter_map(channel_index, (1 << 8) | label, ARINC429_SET);
+			update_sw_filter_map(channel_index, (2 << 8) | label, ARINC429_SET);
+			update_sw_filter_map(channel_index, (3 << 8) | label, ARINC429_SET);
+
+			// activate the hardware filter
+			update_hw_filter_map(channel_index, label, ARINC429_SET);
+
+			// done, filter successfully created
+			return true;
+		}
+		else
+		{
+			// no, can not create the filter
+			return false;
+		}
 	}
 	else
 	{
-		// yes, is the filter set up for an individual SDI?
-		if(sdi != ARINC429_SDI_DATA)
+		// single SDI filter, compute the extended label from the given SDI and label
+		uint16_t  ext_label = ((sdi & 0x03) << 8) | label;
+
+		// does no filter for the given SDI and label exist yet?
+		if(!check_sw_filter_map(channel_index, ext_label))
 		{
-			// yes, check if the buffer is also used by another filter
-			for(uint16_t i = 0; i < ARINC429_RX_FILTERS_NUM; i++)
-			{
-				// skip own filter
-				if(i == index) continue;
+			// yes, assign the filter the new frame buffer
+			channel->frame_filter[ext_label] = buffer_index;
 
-				// own buffer also used by this foreign filter?
-				if(channel->frame_filter[i] == buffer)
-				{
-					// yes, find a new frame buffer, abort if none found
-					if(find_free_rx_frame_buffer(channel_index, &buffer) == false) return false;
+			// activate the software filter
+			update_sw_filter_map(channel_index, ext_label, ARINC429_SET);
 
-					// new buffer found, done with check
-					break;
-				}
-			}
+			// activate the hardware filter
+			update_hw_filter_map(channel_index, label, ARINC429_SET);
+
+			// done, filter successfully created
+			return true;
+		}
+		else
+		{
+			// no, can not create the filter
+			return false;
 		}
 	}
 
-	// disable the filter while updating
-	*filter = ARINC429_RX_FILTER_UNUSED;
-
-	// configure the frame buffer
-	channel->frame_buffer[buffer].frame        = 0;
-	channel->frame_buffer[buffer].frame_age    = ARINC429_RX_BUFFER_UNUSED;
-	channel->frame_buffer[buffer].last_rx_time = 0;
-
-	// update done, activate the filter
-	*filter = buffer;
-
-	// SDI used for data?
-	if(sdi == ARINC429_SDI_DATA)
-	{
-		// yes, activate filter for the remaining 3 SDI values,
-		// with all filters pointing to the same frame buffer
-		channel->frame_filter[index + (1 << 8)] = buffer;
-		channel->frame_filter[index + (2 << 8)] = buffer;
-		channel->frame_filter[index + (3 << 8)] = buffer;
-	}
-
-	// done, filter successfully set up
-	return true;
+	// never get here
+	return false;
 }
 
 
@@ -296,10 +419,10 @@ bool set_rx_filter_helper(uint8_t channel_index, uint8_t label, uint8_t sdi)
 /* get status of the discretes */
 BootloaderHandleMessageResponse debug_get_discretes(const DebugGetDiscretes *data, DebugGetDiscretes_Response *response)
 {
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(DebugGetDiscretes_Response);
 
-	// assemble response data
+	// assemble the response data
 	response->rx_discretes  = (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_R1INT_INDEX],  hi3593_input_pins[HI3593_R1INT_INDEX] ) << 0) |
 	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_R1FLAG_INDEX], hi3593_input_pins[HI3593_R1FLAG_INDEX]) << 1) |
 	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_MB13_INDEX],   hi3593_input_pins[HI3593_MB13_INDEX]  ) << 2) |
@@ -314,7 +437,7 @@ BootloaderHandleMessageResponse debug_get_discretes(const DebugGetDiscretes *dat
 	response->tx_discretes  = (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_TEMPTY_INDEX], hi3593_input_pins[HI3593_TEMPTY_INDEX]) << 0) |
 	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_TFULL_INDEX],  hi3593_input_pins[HI3593_TFULL_INDEX] ) << 1);
 
-	// done
+	// done, send response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
@@ -323,10 +446,10 @@ BootloaderHandleMessageResponse debug_get_discretes(const DebugGetDiscretes *dat
 BootloaderHandleMessageResponse debug_read_register_low_level(const DebugReadRegisterLowLevel          *data,
                                                                     DebugReadRegisterLowLevel_Response *response)
 {
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(DebugReadRegisterLowLevel_Response);
 
-	// check opcode
+	// check the opcode
 	if(opcode_length[data->op_code] < 0)
 	{
 		// invalid opcode
@@ -341,25 +464,25 @@ BootloaderHandleMessageResponse debug_read_register_low_level(const DebugReadReg
 	}
 	else
 	{
-		// execute read access
-		uint32_t ret = hi3593_task_read_register(data->op_code, response->value_data, opcode_length[data->op_code]);
+		// opcode ok, execute a read access
+		uint32_t ret = hi3593_read_register(data->op_code, response->value_data, opcode_length[data->op_code]);
 
-		// check for success
+		// was the read successful?
 		if(ret == 0)
 		{
-			// read access succeeded
+			// yes, collect further response data
 			response->rw_error     = ARINC429_RW_ERROR_OK;
 			response->value_length = opcode_length[data->op_code];
 		}
 		else
 		{
-			// read access failed
+			// no, set response data accordingly
 			response->rw_error     = ARINC429_RW_ERROR_SPI;
 			response->value_length = 0;
 		}
 	}
 
-	// done
+	// done, send response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
@@ -368,13 +491,13 @@ BootloaderHandleMessageResponse debug_read_register_low_level(const DebugReadReg
 BootloaderHandleMessageResponse debug_write_register_low_level(const DebugWriteRegisterLowLevel          *data,
                                                                      DebugWriteRegisterLowLevel_Response *response)
 {
-	// check value_legth parameter, abort if invalid
+	// check the value_legth parameter, abort if invalid
 	if(data->value_length > 32)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(DebugWriteRegisterLowLevel_Response);
 
-	// check opcode
+	// check the opcode
 	if(opcode_length[data->op_code] < 0)
 	{
 		// invalid opcode
@@ -387,28 +510,28 @@ BootloaderHandleMessageResponse debug_write_register_low_level(const DebugWriteR
 	}
 	else if(opcode_length[data->op_code] != data->value_length)
 	{
-		// number of data bytes provided does not match with opcode
+		// the number of data bytes provided does not match with opcode
 		response->rw_error = ARINC429_RW_ERROR_INVALID_LENGTH;
 	}
 	else
 	{
-		// execute write access
-		uint32_t ret = hi3593_task_write_register(data->op_code, data->value_data, opcode_length[data->op_code]);
+		// execute a write access
+		uint32_t ret = hi3593_write_register(data->op_code, data->value_data, opcode_length[data->op_code]);
 
-		// check for success
+		// was the write successful?
 		if(ret == 0)
 		{
-			// write access succeeded
+			// yes, write access succeeded
 			response->rw_error = ARINC429_RW_ERROR_OK;
 		}
 		else
 		{
-			// write access failed
+			// no, write access failed
 			response->rw_error = ARINC429_RW_ERROR_SPI;
 		}
 	}
 
-	// done
+	// done, send response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
@@ -420,17 +543,19 @@ BootloaderHandleMessageResponse debug_write_register_low_level(const DebugWriteR
 BootloaderHandleMessageResponse get_capabilities(const GetCapabilities          *data,
                                                        GetCapabilities_Response *response)
 {
-	// prepare response
+	// prepare the response
 	response->header.length      = sizeof(GetCapabilities_Response);
 
-	// collect response data
-	response->rx_channels         = ARINC429_RX_CHANNELS_NUM;    // number of available RX channels
-	response->rx_frame_filters    = ARINC429_RX_BUFFER_NUM - 1;  // number of available RX frame filters (one buffer is reserved for internal purpose)
-	response->tx_channels         = ARINC429_TX_CHANNELS_NUM;    // number of available TX channels
-	response->tx_schedule_entries = ARINC429_TX_TASKS_NUM;       // number of available TX schedule job   entries
-	response->tx_schedule_frames  = ARINC429_TX_BUFFER_NUM;      // number of available TX schedule frame entries
+	// collect the response data
+	response->tx_total_scheduler_tasks = ARINC429_TX_TASKS_NUM;                       // total number of TX  scheduler task entries
+	response->tx_used_scheduler_tasks  = arinc429.tx_channel[0].scheduler_tasks_used; // number of used  TX  scheduler task entries
 
-	// done
+	// the number of frame filters is limited by the number of frame buffers
+	response->rx_total_frame_filters   = ARINC429_RX_BUFFER_NUM;                      // total number of RX  frame filters
+	response->rx_used_frame_filters[0] = arinc429.rx_channel[0].frame_buffers_used;   // number of used  RX1 frame filters
+	response->rx_used_frame_filters[1] = arinc429.rx_channel[1].frame_buffers_used;   // number of used  RX2 frame filters
+
+	// done, send the response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
@@ -440,37 +565,27 @@ BootloaderHandleMessageResponse set_heartbeat_callback_configuration(const SetHe
 {
 	uint8_t  mode;
 
-	// determine mode - step 1: on_change or not
+	// determine the mode - step 1: on_change or unconditional?
 	mode = (data->value_has_to_change == true) ? ARINC429_CALLBACK_ON_CHANGE : ARINC429_CALLBACK_ON;
 
-	// determine mode - step 2: on(_change) or off
+	// determine the mode - step 2: on(_change) or off?
 	if(data->period == 0)  mode = ARINC429_CALLBACK_OFF;
 
-	// store new configuration
+	// store the new configuration
 	arinc429.heartbeat.period = (uint16_t)(data->period * 1000);  // period is stored in ms
 	arinc429.heartbeat.mode   = mode;
 
-	// restart the sequence numbers
-	arinc429.heartbeat.seq_number = 0;
-
-	// reset statistics counters - TX channel(s)
-	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
+	// reset the sequence number if the mode is set to 'off'
+	if(mode == ARINC429_CALLBACK_OFF)
 	{
-		arinc429.tx_channel[i].common.frames_processed_curr = arinc429.tx_channel[i].common.frames_processed_last = 0;
-		arinc429.tx_channel[i].common.frames_lost_curr      = arinc429.tx_channel[i].common.frames_lost_last      = 0;
+		// restart the sequence numbers from zero
+		arinc429.heartbeat.seq_number = 0;
 	}
 
-	// reset statistics counters - RX channels
-	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
-	{
-		arinc429.rx_channel[i].common.frames_processed_curr = arinc429.rx_channel[i].common.frames_processed_last = 0;
-		arinc429.rx_channel[i].common.frames_lost_curr      = arinc429.rx_channel[i].common.frames_lost_last      = 0;
-	}
-
-	// set time reference
+	// set the reference time for the timing of the next heartbeat
 	arinc429.heartbeat.last_time = system_timer_get_ms();
 
-	// done
+	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -479,10 +594,10 @@ BootloaderHandleMessageResponse set_heartbeat_callback_configuration(const SetHe
 BootloaderHandleMessageResponse get_heartbeat_callback_configuration(const GetHeartbeatCallbackConfiguration          *data,
                                                                            GetHeartbeatCallbackConfiguration_Response *response)
 {
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(GetHeartbeatCallbackConfiguration_Response);
 
-	// collect response
+	// collect the response data
 	switch(arinc429.heartbeat.mode)
 	{
 		default                          : /* FALLTHROUGH */
@@ -493,7 +608,7 @@ BootloaderHandleMessageResponse get_heartbeat_callback_configuration(const GetHe
 
 	response->period = (uint8_t)(arinc429.heartbeat.period / 1000);  // period was stored in ms
 
-	// done
+	// done, send response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
@@ -501,40 +616,40 @@ BootloaderHandleMessageResponse get_heartbeat_callback_configuration(const GetHe
 /* set the channel configuration */
 BootloaderHandleMessageResponse set_channel_configuration(const SetChannelConfiguration *data)
 {
-	// check parameters, abort if invalid
+	// check the parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_ALL))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->parity  > ARINC429_PARITY_AUTO   )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->speed   > ARINC429_SPEED_LS      )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// do TX channel(s)
+	// do all TX channels
 	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1 + i))
 		{
-			// yes, indicate a pending configuration change
-			arinc429.tx_channel[i].common.pending_change = 1;
+			// yes, update the channel configuration
+			arinc429.tx_channel[i].common.parity_speed = (data->parity << 4) | (data->speed << 0);
 
-			// update channel configuration
-			arinc429.tx_channel[i].common.parity_speed = ARINC429_CHANGE_REQUEST | (data->parity << 4) | (data->speed << 0);
+			// request execution of the update
+			arinc429.tx_channel[i].common.change_request |= ARINC429_UPDATE_SPEED_PARITY;
 		}
 	}
 
-	// do RX channels
+	// do all RX channels
 	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
 		{
-			// yes, indicate a pending configuration change
-			arinc429.rx_channel[i].common.pending_change = 1;
+			// yes, update the channel configuration
+			arinc429.rx_channel[i].common.parity_speed = (data->parity << 4) | (data->speed << 0);
 
-			// update channel configuration
-			arinc429.rx_channel[i].common.parity_speed = ARINC429_CHANGE_REQUEST | (data->parity << 4) | (data->speed << 0);
+			// request execution of the update
+			arinc429.rx_channel[i].common.change_request |= ARINC429_UPDATE_SPEED_PARITY;
 		}
 	}
 
-	// done
+	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -545,9 +660,10 @@ BootloaderHandleMessageResponse get_channel_configuration(const GetChannelConfig
 {
 	ARINC429Common *config;
 
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(GetChannelConfiguration_Response);
 
+	// pick the selected channel
 	switch(data->channel)
 	{
 		default                   : return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
@@ -557,11 +673,11 @@ BootloaderHandleMessageResponse get_channel_configuration(const GetChannelConfig
 		case ARINC429_CHANNEL_RX2 : config = &(arinc429.rx_channel[1].common);  break;
 	}
 
-	// collect response
-	response->parity  = (config->parity_speed & 0x70) ? 1 : 0;
-	response->speed   = (config->parity_speed & 0x07) ? 1 : 0;
+	// collect response data
+	response->parity  = (config->parity_speed & 0xF0) ? 1 : 0;
+	response->speed   = (config->parity_speed & 0x0F) ? 1 : 0;
 
-	// done
+	// done, send response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
@@ -569,40 +685,40 @@ BootloaderHandleMessageResponse get_channel_configuration(const GetChannelConfig
 /* set the channel operating mode (passive/active/run) */
 BootloaderHandleMessageResponse set_channel_mode(const SetChannelMode *data)
 {
-	// check parameters, abort if invalid
+	// check the parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_ALL))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// do TX channel(s)
+	// do all TX channels
 	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1 + i))
 		{
-			// yes, check mode parameter, abort if invalid
+			// yes, check 'mode' parameter, abort if invalid
 			if(data->mode > ARINC429_CHANNEL_MODE_RUN)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-			// indicate a pending configuration change
-			arinc429.tx_channel[i].common.pending_change = 1;
+			// update the channel operating mode
+			arinc429.tx_channel[i].common.operating_mode = data->mode;
 
-			// update channel configuration
-			arinc429.tx_channel[i].common.operating_mode = ARINC429_CHANGE_REQUEST | data->mode;
+			// request execution of the update
+			arinc429.tx_channel[i].common.change_request |= ARINC429_UPDATE_OPERATING_MODE;
 		}
 	}
 
-	// do RX channels
+	// do all RX channels
 	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
 		{
-			// yes, check mode parameter, abort if invalid
+			// yes, check 'mode' parameter, abort if invalid
 			if(data->mode > ARINC429_CHANNEL_MODE_ACTIVE)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-			// indicate a pending configuration change
-			arinc429.rx_channel[i].common.pending_change = 1;
+			// update the channel operating mode
+			arinc429.rx_channel[i].common.operating_mode = data->mode;
 
-			// update channel configuration
-			arinc429.rx_channel[i].common.operating_mode = ARINC429_CHANGE_REQUEST | data->mode;
+			// request execution of the update
+			arinc429.rx_channel[i].common.change_request |= ARINC429_UPDATE_OPERATING_MODE;
 		}
 	}
 
@@ -617,10 +733,10 @@ BootloaderHandleMessageResponse get_channel_mode(const GetChannelMode          *
 {
 	ARINC429Common *config;
 
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(GetChannelMode_Response);
 
-	// switch on selected channel
+	// pick the selected channel
 	switch(data->channel)
 	{
 		default                   : return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
@@ -630,176 +746,195 @@ BootloaderHandleMessageResponse get_channel_mode(const GetChannelMode          *
 		case ARINC429_CHANNEL_RX2 : config = &(arinc429.rx_channel[1].common); break;
 	}
 
-	// collect response
-	response->mode = config->operating_mode & 0x07;
+	// collect the response data
+	response->mode = config->operating_mode;
 
-	// done
-	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
-}
-
-
-/* disable the priority filters */
-BootloaderHandleMessageResponse clear_prio_labels(const ClearPrioLabels *data)
-{
-	// check channel parameter, abort if invalid
-	if(!check_channel(data->channel, GROUP_RX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-
-	// do RX channels
-	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
-	{
-		// channel selected?
-		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
-		{
-			// yes, indicate a pending configuration change
-			arinc429.rx_channel[i].common.pending_change = 1;
-
-			// clear priority labels
-			memset(arinc429.rx_channel[i].prio_label, 0, 3);
-
-			// disable priority filters
-			arinc429.rx_channel[i].prio_mode = ARINC429_CHANGE_REQUEST | ARINC429_PRIORITY_DISABLED;
-		}
-	}
-
-	// done
-	return HANDLE_MESSAGE_RESPONSE_EMPTY;
-}
-
-
-/* set the priority filter configuration */
-BootloaderHandleMessageResponse set_prio_labels(const SetPrioLabels *data)
-{
-	// check channel parameter, abort if invalid
-	if(!check_channel(data->channel, GROUP_RX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-
-	// do RX channels
-	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
-	{
-		// channel selected?
-		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
-		{
-			// yes, indicate a pending configuration change
-			arinc429.rx_channel[i].common.pending_change = 1;
-
-			// copy priority labels
-			memcpy(arinc429.rx_channel[i].prio_label, data->label, 3);
-
-			// enable priority filters
-			arinc429.rx_channel[i].prio_mode = ARINC429_CHANGE_REQUEST | ARINC429_PRIORITY_ENABLED;
-		}
-	}
-
-	// done
-	return HANDLE_MESSAGE_RESPONSE_EMPTY;
-}
-
-
-/* get the priority filter configuration */
-BootloaderHandleMessageResponse get_prio_labels(const GetPrioLabels          *data,
-                                                      GetPrioLabels_Response *response)
-{
-	ARINC429RXChannel *channel;
-
-	// prepare response
-	response->header.length = sizeof(GetPrioLabels_Response);
-
-	// switch on selected channel
-	switch(data->channel)
-	{
-		default                   : return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-
-		case ARINC429_CHANNEL_RX1 : channel = &(arinc429.rx_channel[0]);  break;
-		case ARINC429_CHANNEL_RX2 : channel = &(arinc429.rx_channel[1]);  break;
-	}
-
-	// collect priority labels
-	memcpy(response->label,  channel->prio_label, 3);
-
-	// extract mode
-	response->prio_enabled = ((channel->prio_mode & 0x07) == ARINC429_PRIORITY_ENABLED) ? true : false;
-
-	// done
+	// done, send response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 
 /* clear all RX filters */
-BootloaderHandleMessageResponse clear_all_rx_filters(const ClearAllRXFilters *data)
+BootloaderHandleMessageResponse clear_all_rx_filters(const ClearAllRXLabelFilters *data)
 {
-	// check channel parameter, abort if invalid
+	// check the channel parameter, abort if invalid
 	if(!check_channel(data->channel, GROUP_RX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// do RX channels
+	// do all RX channels
 	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
 		{
-			// yes, disable all frame filters
-			for(uint16_t j = 0; j < ARINC429_RX_FILTERS_NUM; j++)
+			// yes, get a pointer to the channel
+			ARINC429RXChannel *channel = &(arinc429.rx_channel[i]);
+
+			// disable all software filters
+			for(uint8_t j = 0; j < 32; j++)
 			{
-				arinc429.rx_channel[i].frame_filter[j] = ARINC429_RX_FILTER_UNUSED;
+				channel->frame_filter_map[j] = 0;
+			}
+
+			// disable all hardware filters
+			for(uint8_t j = 0; j < 32; j++)
+			{
+				channel->hardware_filter[j] = 0;
 			}
 
 			// revert all frame buffers to unused state
-			for(uint8_t  k = 0; k < (ARINC429_RX_BUFFER_NUM - 1); k++)
+			for(uint16_t  j = 0; j < ARINC429_RX_BUFFER_NUM; j++)
 			{
-				arinc429.rx_channel[i].frame_buffer[k].frame_age = ARINC429_RX_BUFFER_UNUSED;
+				channel->frame_buffer[j].frame_age = ARINC429_RX_BUFFER_UNUSED;
 			}
+
+			// no frame buffer is used any more now
+			channel->frame_buffers_used = 0;
+
+			// request execution of the FIFO hardware filter update
+			channel->common.change_request |= ARINC429_UPDATE_FIFO_FILTER;
 		}
 	}
 
-	// done
+	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
 
 /* clear one RX filter */
-BootloaderHandleMessageResponse clear_rx_filter(const ClearRXFilter *data)
+BootloaderHandleMessageResponse clear_rx_filter(const ClearRXLabelFilter          *data,
+                                                      ClearRXLabelFilter_Response *response)
 {
-	// check parameters, abort if invalid
+	// prepare the response
+	response->header.length = sizeof(ClearRXLabelFilter_Response);
+
+	// check the parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_RX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->sdi     > ARINC429_SDI_DATA     )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// do RX channels
+	// default is successful filter removal
+	response->success = true;
+
+	// do all RX channels
 	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
 		{
-			// yes, clear the filter and free its frame buffer if applicable
-			clear_rx_filter_helper(i, data->label, data->sdi);
+			// yes, try to clear the filter and free its frame buffer, success?
+			if(clear_rx_filter_helper(i, data->label, data->sdi))
+			{
+				// yes, decrement the number of filters in use
+				arinc429.rx_channel[i].frame_buffers_used--;
+
+				// request an update of the FIFO hardware filter
+				arinc429.rx_channel[i].common.change_request |= ARINC429_UPDATE_FIFO_FILTER;
+			}
+			else
+			{
+				// no, filter removal failed at least once
+				response->success = false;
+			}
 		}
 	}
 
-	// done
+	// done, send response
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+}
+
+
+/* set RX standard filters */
+BootloaderHandleMessageResponse set_rx_standard_filters(const SetRXStandardFilters *data)
+{
+	// check the channel parameter, abort if invalid
+	if(!check_channel(data->channel, GROUP_RX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
+	// do all RX channels
+	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
+	{
+		// channel selected?
+		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
+		{
+			// yes, get a pointer to the channel
+			ARINC429RXChannel *channel = &(arinc429.rx_channel[i]);
+
+			// enable all software filters
+			for(uint8_t j = 0; j < 32; j++)
+			{
+				channel->frame_filter_map[j] = ~0;
+			}
+
+			// enable all hardware filters
+			for(uint8_t j = 0; j < 32; j++)
+			{
+				channel->hardware_filter[j] = ~0;
+			}
+
+            // link the frame buffers
+            for(uint16_t j = 0; j < ARINC429_RX_FILTERS_NUM; j++)
+			{
+				channel->frame_filter[j] = (uint8_t)(j & 0x00FF);
+			}
+
+			// initialize all frame buffers
+			for(uint16_t j = 0; j < ARINC429_RX_BUFFER_NUM; j++)
+			{
+				channel->frame_buffer[j].frame        = 0;
+				channel->frame_buffer[j].frame_age    = ARINC429_RX_BUFFER_EMPTY;
+				channel->frame_buffer[j].last_rx_time = 0;
+			}
+
+			// all frame buffers are in use now
+			channel->frame_buffers_used = ARINC429_RX_BUFFER_NUM;
+
+			// request execution of the FIFO hardware filter update
+			channel->common.change_request |= ARINC429_UPDATE_FIFO_FILTER;
+		}
+	}
+
+	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
 
-/* set a RX filter configuration */
-BootloaderHandleMessageResponse set_rx_filter(const SetRXFilter *data)
+/* set one RX filter */
+BootloaderHandleMessageResponse set_rx_filter(const SetRXFilter          *data,
+                                                    SetRXFilter_Response *response)
 {
-	bool  success = true;
+	// prepare the response
+	response->header.length = sizeof(SetRXFilter_Response);
 
 	// check parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_RX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->sdi     > ARINC429_SDI_DATA     )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// do RX channels
+	// default is successful filter creation
+	response->success = true;
+
+	// do all RX channels
 	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
 		{
-			// yes, try to set up the filter, memorize if failed
-			if (set_rx_filter_helper(i, data->label, data->sdi) == false)  success = false;
+			// yes, try to set up the filter, success?
+			if (set_rx_filter_helper(i, data->label, data->sdi))
+			{
+				// yes, increment the number of filters in use
+				arinc429.rx_channel[i].frame_buffers_used++;
+
+				// request an update of the FIFO hardware filter
+				arinc429.rx_channel[i].common.change_request |= ARINC429_UPDATE_FIFO_FILTER;
+			}
+			else
+			{
+				// no, filter creation failed at least once
+				response->success = false;
+			}
 		}
 	}
 
-	// done, report success
-	if(success) return HANDLE_MESSAGE_RESPONSE_EMPTY;
-	else        return HANDLE_MESSAGE_RESPONSE_NOT_SUPPORTED;
+	// done, send response
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
 
@@ -808,31 +943,68 @@ BootloaderHandleMessageResponse get_rx_filter(const GetRXFilter          *data,
                                                     GetRXFilter_Response *response)
 {
 	ARINC429RXChannel *channel;
-	uint16_t           index;
-	uint8_t            buffer;
+	uint8_t            channel_index;
+	uint8_t            buffer_index[4] = {0,0,0,0};  // initialization for sole purpose of avoiding a compiler warning
 
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(GetRXFilter_Response);
 
-	// switch on selected channel
+	// default result is 'filter is configured'
+	response->configured = true;
+
+	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
+
+	// pick the selected channel
 	switch(data->channel)
 	{
 		default                   : return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-		case ARINC429_CHANNEL_RX1 : channel = &(arinc429.rx_channel[0]);  break;
-		case ARINC429_CHANNEL_RX2 : channel = &(arinc429.rx_channel[1]);  break;
+		case ARINC429_CHANNEL_RX1 : channel = &(arinc429.rx_channel[0]);  channel_index = 0; break;
+		case ARINC429_CHANNEL_RX2 : channel = &(arinc429.rx_channel[1]);  channel_index = 1; break;
 	}
 
-	// compute filter index from SDI and label, replacing SDI_DATA by SDI 0
-	index = ((data->sdi & 0x03) << 8) | data->label;
+	// pick the selected SDI
+	switch(data->sdi)
+	{
+		default                : return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// retrieve buffer index
-	buffer = channel->frame_filter[index];
+		case ARINC429_SDI_DATA : /* FALLTHROUGH */
 
-	// filter in use?
-	response->configured = (buffer != ARINC429_RX_FILTER_UNUSED) ?  true : false;
+		case ARINC429_SDI0     : if(!check_sw_filter_map(channel_index,  (0 << 8) | data->label)) { response->configured = false;  break; }
+		                         if(data->sdi != ARINC429_SDI_DATA                              ) {                                break; }
 
-	// done
+		                         buffer_index[0] = channel->frame_filter[(0 << 8) | data->label];
+
+		                         /* FALLTHROUGH */
+
+		case ARINC429_SDI1     : if(!check_sw_filter_map(channel_index,  (1 << 8) | data->label)) { response->configured = false;  break; }
+		                         if(data->sdi != ARINC429_SDI_DATA                              ) {                                break; }
+
+		                         buffer_index[1] = channel->frame_filter[(1 << 8) | data->label];
+
+		                         /* FALLTHROUGH */
+
+		case ARINC429_SDI2     : if(!check_sw_filter_map(channel_index,  (2 << 8) | data->label)) { response->configured = false;  break; }
+		                         if(data->sdi != ARINC429_SDI_DATA                              ) {                                break; }
+
+		                         buffer_index[2] = channel->frame_filter[(2 << 8) | data->label];
+
+		                         /* FALLTHROUGH */
+
+		case ARINC429_SDI3     : if(!check_sw_filter_map(channel_index,  (3 << 8) | data->label)) { response->configured = false;  break; }
+		                         if(data->sdi != ARINC429_SDI_DATA                              ) {                                break; }
+
+		                         buffer_index[3] = channel->frame_filter[(3 << 8) | data->label];
+
+		                         /* FALLTHROUGH */
+
+		                         // for SDI_DATA, all 4 buffer indices also need to point to the same frame buffer
+		                         if(    (buffer_index[0] != buffer_index[1])
+		                             || (buffer_index[1] != buffer_index[2])
+		                             || (buffer_index[2] != buffer_index[3]) )                    { response->configured = false;  break; }
+	}
+
+	// done, send the response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
@@ -842,46 +1014,57 @@ BootloaderHandleMessageResponse read_frame(const ReadFrame          *data,
                                                  ReadFrame_Response *response)
 {
 	ARINC429RXChannel *channel;
-	uint16_t           index;
-	uint8_t            buffer;
+    uint8_t            channel_index;
 
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(ReadFrame_Response);
 
-	// switch on selected channel
+	// pick the selected channel
 	switch(data->channel)
 	{
 		default                   : return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-		case ARINC429_CHANNEL_RX1 : channel = &(arinc429.rx_channel[0]);  break;
-		case ARINC429_CHANNEL_RX2 : channel = &(arinc429.rx_channel[1]);  break;
+		case ARINC429_CHANNEL_RX1 : channel = &(arinc429.rx_channel[0]);  channel_index = 0; break;
+		case ARINC429_CHANNEL_RX2 : channel = &(arinc429.rx_channel[1]);  channel_index = 1; break;
 	}
 
-	// compute filter index from SDI and label, replacing SDI_DATA by SDI 0
-	index = ((data->sdi & 0x03) << 8) | data->label;
+	// compute the filter index from the SDI and label, thereby replacing SDI_DATA by SDI 0
+	uint16_t ext_label = ((data->sdi & 0x03) << 8) | data->label;
 
-	// retrieve buffer index
-	buffer = channel->frame_filter[index];
-
-	// set default response
-	response->status = false;
-	response->frame  = 0;
-	response->age    = 0;
-
-	// filter activated?
-	if((buffer == ARINC429_RX_FILTER_UNUSED))
+	// does the SDI/label combination have a filter assigned?
+	if(check_sw_filter_map(channel_index, ext_label))
 	{
-		// yes, any frame received yet?
-		if(channel->frame_buffer[buffer].frame_age != ARINC429_RX_BUFFER_UNUSED)
+		// yes, retrieve the buffer index
+		uint8_t buffer_index = channel->frame_filter[ext_label];
+
+		// collect the response data
+		switch(channel->frame_buffer[buffer_index].frame_age)
 		{
-			// yes, collect response data
-			response->status = true;
-			response->frame  = channel->frame_buffer[buffer].frame;
-			response->age    = channel->frame_buffer[buffer].frame_age;
+			case ARINC429_RX_BUFFER_EMPTY   : response->status = false;
+											  response->frame  = 0;
+											  response->age    = 0;
+											  break;
+
+			case ARINC429_RX_BUFFER_TIMEOUT : response->status = true;
+											  response->frame  = channel->frame_buffer[buffer_index].frame;
+											  response->age    = channel->timeout_period;
+											  break;
+
+			default                         : response->status = true;
+											  response->frame  = channel->frame_buffer[buffer_index].frame;
+											  response->age    = channel->frame_buffer[buffer_index].frame_age;
+											  break;
 		}
 	}
+	else
+	{
+		// no, set a default response
+		response->status = false;
+		response->frame  = 0;
+		response->age    = 0;
+	}
 
-	// done
+	// done, send the response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
@@ -889,33 +1072,33 @@ BootloaderHandleMessageResponse read_frame(const ReadFrame          *data,
 /* set configuration of the RX frame callback */
 BootloaderHandleMessageResponse set_rx_callback_configuration(const SetRXCallbackConfiguration *data)
 {
-	// check parameters, abort if invalid
+	// check the parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_RX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->timeout < 10                    )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->timeout > 60000                 )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// determine mode - step 1: on_change or not
+	// determine the mode - step 1: on_change or not
 	uint8_t mode = (data->value_has_to_change == true) ? ARINC429_CALLBACK_ON_CHANGE : ARINC429_CALLBACK_ON;
 
-	// determine mode - step 2: on(_change) or off
+	// determine the mode - step 2: on(_change) or off
 	if(data->enabled == false)  mode = ARINC429_CALLBACK_OFF;
 
-	// do RX channels
+	// do all RX channels
 	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
 		{
-			// yes, indicate a pending configuration change
-			arinc429.rx_channel[i].common.pending_change = 1;
-
-			// update channel
-			arinc429.rx_channel[i].common.callback_mode = ARINC429_CHANGE_REQUEST | mode;
+			// yes, update the channel data
+			arinc429.rx_channel[i].common.callback_mode = mode;
 			arinc429.rx_channel[i].timeout_period       = data->timeout;
+
+			// request execution of the update
+			arinc429.rx_channel[i].common.change_request |= ARINC429_UPDATE_CALLBACK_MODE;
 		}
 	}
 
-	// done
+	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -926,10 +1109,10 @@ BootloaderHandleMessageResponse get_rx_callback_configuration(const GetRXCallbac
 {
 	ARINC429RXChannel *channel;
 
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(GetRXCallbackConfiguration_Response);
 
-	// switch on selected channel
+	// pick the selected channel
 	switch(data->channel)
 	{
 		default                   : return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
@@ -950,7 +1133,7 @@ BootloaderHandleMessageResponse get_rx_callback_configuration(const GetRXCallbac
 	// get the response for 'timeout'
 	response->timeout = channel->timeout_period;
 
-	// done
+	// done, send response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
@@ -958,40 +1141,41 @@ BootloaderHandleMessageResponse get_rx_callback_configuration(const GetRXCallbac
 /* send a frame immediately */
 BootloaderHandleMessageResponse write_frame_direct(const WriteFrameDirect *data)
 {
-	// check channel parameter, abort if invalid
+	uint8_t  next_head;  // head position in immediate transmit queue
+
+	// check the channel parameter, abort if invalid
 	if(!check_channel(data->channel, GROUP_TX))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// do TX channel(s)
+	// do all TX channels
 	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1 + i))
 		{
-			// get pointer to channel
+			// get a pointer to the channel
 			ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
 
-			// compute next head (modulo ARINC429_TX_QUEUE_SIZE)
-			uint8_t next_head = channel->head + 1;
-			next_head &= ARINC429_TX_QUEUE_SIZE - 1;
+			// compute the next head position
+			next_head = (channel->head + 1) & (ARINC429_TX_QUEUE_SIZE - 1);
 
-			// TX queue able to accept a frame?
+			// is the immediate transmit queue able to accept a frame?
 			if(next_head == channel->tail)
 			{
-				// no, increment statistics counter on lost frames
+				// no, increment the statistics counter on lost frames
 				channel->common.frames_lost_curr++;
 			}
 			else
 			{
-				// yes, enqueue frame
+				// yes, enqueue the frame
 				channel->queue[next_head] = data->frame;
 
-				// update head
+				// update the head position
 				channel->head = next_head;
 			}
 		}
 	}
 
-	// done
+	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -999,22 +1183,22 @@ BootloaderHandleMessageResponse write_frame_direct(const WriteFrameDirect *data)
 /* define or update a frame sent via the scheduler */
 BootloaderHandleMessageResponse write_frame_scheduled(const WriteFrameScheduled *data)
 {
-	// check parameters, abort if invalid
+	// check the parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_TX)     )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->frame_index >= ARINC429_TX_BUFFER_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// do TX channel(s)
+	// do all TX channels
 	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1 + i))
 		{
-			// write frame to TX buffer
+			// yes, store frame to the TX frame table
 			arinc429.tx_channel[i].frame_buffer[data->frame_index] = data->frame;
 		}
 	}
 
-	// done
+	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -1022,32 +1206,38 @@ BootloaderHandleMessageResponse write_frame_scheduled(const WriteFrameScheduled 
 /* clear a range of scheduler entries */
 BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntries *data)
 {
-	ARINC429TXChannel *channel;
-
-	// check parameters, abort if invalid
+	// check the parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_TX)         )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->task_index_first >= ARINC429_TX_TASKS_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->task_index_first >  data->task_index_last)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->task_index_last  >= ARINC429_TX_TASKS_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// do TX channel(s)
+	// do all TX channels
 	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1 + i))
 		{
-			// yes, get pointer to channel
-			channel = &(arinc429.tx_channel[i]);
+			// yes, get a pointer to the channel
+			ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
 
-			// clear job entries (this can be done while the scheduler is running)
+			// clear the task entries (this can be done while the scheduler is running)
 			for(uint16_t j = data->task_index_first; j <= data->task_index_last; j++)
 			{
-				channel->job_frame[j] = ARINC429_SCHEDULER_JOB_EMPTY << ARINC429_TX_JOB_JOBCODE_POS;
+				// is the task already 'empty'?
+				if((channel->job_frame[j] & ARINC429_TX_JOB_JOBCODE_MASK) != (ARINC429_SCHEDULER_JOB_EMPTY << ARINC429_TX_JOB_JOBCODE_POS))
+				{
+					// no, set the task to 'empty'
+					channel->job_frame[j] = ARINC429_SCHEDULER_JOB_EMPTY << ARINC429_TX_JOB_JOBCODE_POS;
+
+					// decrement the number of used task entries
+					channel->scheduler_tasks_used--;
+				}
 			}
 		}
 	}
 
-	// done
+	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -1055,31 +1245,36 @@ BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntrie
 /* set a scheduler entry */
 BootloaderHandleMessageResponse set_schedule_entry(const SetScheduleEntry *data)
 {
-	ARINC429TXChannel *channel;
-
-	// check parameters, abort if invalid
+	// check the parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_TX)             )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->task_index   >= ARINC429_TX_TASKS_NUM        )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->job          >  ARINC429_SCHEDULER_JOB_CYCLIC)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->frame_index  >= ARINC429_TX_BUFFER_NUM       )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->dwell_time   >  250                          )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// do TX channel(s)
+	// do all TX channels
 	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
 	{
 		// channel selected?
 		if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1 + i))
 		{
-			// yes, get pointer to channel
-			channel = &(arinc429.tx_channel[i]);
+			// yes, get a pointer to the channel
+			ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
 
-			// update task tables
+			// is the task in use already?
+			if((channel->job_frame[data->task_index] & ARINC429_TX_JOB_JOBCODE_MASK) == (ARINC429_SCHEDULER_JOB_EMPTY << ARINC429_TX_JOB_JOBCODE_POS))
+			{
+				// no, increment the number of used task entries
+				channel->scheduler_tasks_used++;
+			}
+
+			// update the task table
 			channel->dwell_time[data->task_index] = data->dwell_time;
-			channel->job_frame[data->task_index]  = (data->job << ARINC429_TX_JOB_JOBCODE_POS) | (data->frame_index << ARINC429_TX_JOB_INDEX_POS);
+			channel->job_frame [data->task_index] = (data->job << ARINC429_TX_JOB_JOBCODE_POS) | (data->frame_index << ARINC429_TX_JOB_INDEX_POS);
 		}
 	}
 
-	// done
+	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
@@ -1090,13 +1285,13 @@ BootloaderHandleMessageResponse get_schedule_entry(const GetScheduleEntry       
 {
 	ARINC429TXChannel *channel;
 
-	// prepare response
+	// prepare the response
 	response->header.length = sizeof(GetScheduleEntry_Response);
 
-	// check parameter, abort if invalid
+	// check the parameter, abort if invalid
 	if(data->task_index >= ARINC429_TX_TASKS_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// switch on selected channel
+	// pick the selected channel
 	switch(data->channel)
 	{
 		default                   : return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
@@ -1104,38 +1299,56 @@ BootloaderHandleMessageResponse get_schedule_entry(const GetScheduleEntry       
 		case ARINC429_CHANNEL_TX1 : channel = &(arinc429.tx_channel[0]);  break;
 	}
 
-	// collect response data
+	// collect the response data
 	response->job         = (channel->job_frame[data->task_index] & ARINC429_TX_JOB_JOBCODE_MASK) >> ARINC429_TX_JOB_JOBCODE_POS;
 	response->frame_index = (channel->job_frame[data->task_index] & ARINC429_TX_JOB_INDEX_MASK  ) >> ARINC429_TX_JOB_INDEX_POS;
 
-	response->dwell_time  = (response->job == ARINC429_SCHEDULER_JOB_EMPTY) ? 0 : channel->dwell_time[data->task_index];
+	response->dwell_time  = (response->job == ARINC429_SCHEDULER_JOB_EMPTY) ? 0 : channel->dwell_time  [data->task_index     ];
 	response->frame       = (response->job == ARINC429_SCHEDULER_JOB_EMPTY) ? 0 : channel->frame_buffer[response->frame_index];
 
-	// done
+	// done, send the response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
 }
 
+
+/* reset A429 operations */
+BootloaderHandleMessageResponse reset_a429(const Reset_A429 *data)
+{
+	// check the parameter, abort if invalid
+	if(data->mode > ARINC429_A429_MODE_DEBUG)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
+	// set the new operating mode
+	arinc429.system.operating_mode = data->mode;
+
+	// request a reset of the A429 data structure and chip
+	arinc429.system.change_request |= (ARINC429_SYSTEM_RESET_A429_DATA | ARINC429_SYSTEM_RESET_A429_CHIP);
+
+	// done, no response
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
 
 
 /****************************************************************************/
 /* callbacks                                                                */
 /****************************************************************************/
 
-// enqueue a callback message request
-bool enqueue_message(uint8_t message, uint8_t buffer)
+// enqueue a callback message
+bool enqueue_message(uint8_t message, uint16_t timestamp, uint8_t buffer)
 {
-	// compute next head position (modulo ARINC429_CB_QUEUE_SIZE)
-	uint8_t next_head = arinc429.callback.head + 1;
-	next_head &= ARINC429_CB_QUEUE_SIZE - 1;
+	uint8_t next_head;  // next head position in callback queue
+
+	// compute the next head position
+	next_head = (arinc429.callback.head + 1) & (ARINC429_CB_QUEUE_SIZE - 1);
 
 	// abort if there is no free space in the message queue
 	if(next_head == arinc429.callback.tail)  return false;
 
-	// enqueue message request
-	arinc429.callback.queue[next_head].message = message;
-	arinc429.callback.queue[next_head].buffer  = buffer;
+	// enqueue the message
+	arinc429.callback.queue[next_head].message   = message;
+	arinc429.callback.queue[next_head].timestamp = timestamp;
+	arinc429.callback.queue[next_head].buffer    = buffer;
 
-	// update head
+	// update the head position
 	arinc429.callback.head = next_head;
 
 	// done, message successfully enqueued
@@ -1144,13 +1357,11 @@ bool enqueue_message(uint8_t message, uint8_t buffer)
 
 
 /* generate callbacks */
-bool handle_callbacks(void)              // %%% thread D
+bool handle_callbacks(void)
 {
 	static Heartbeat_Callback  cb_heartbeat;
 	static Frame_Callback      cb_frame;
-
-	       uint8_t             message;
-	       uint8_t             buffer;
+           uint8_t             next_tail;
 
 	// done if there is no pending message request in the queue
 	if(arinc429.callback.tail == arinc429.callback.head)           return false;
@@ -1158,38 +1369,39 @@ bool handle_callbacks(void)              // %%% thread D
 	// done if the last callback is still pending transmission
 	if(!bootloader_spitfp_is_send_possible(&bootloader_status.st)) return false;
 
-	// compute next tail position (modulo ARINC429_CB_QUEUE_SIZE)
-	uint8_t next_tail = arinc429.callback.tail + 1;
-	next_tail &= ARINC429_CB_QUEUE_SIZE - 1;
+	// compute the next tail position
+	next_tail = (arinc429.callback.tail + 1) & (ARINC429_CB_QUEUE_SIZE - 1);
 
-	// get message and buffer
-	message = arinc429.callback.queue[next_tail].message;
-	buffer  = arinc429.callback.queue[next_tail].buffer;
+	// get the message data
+	uint8_t  message   = arinc429.callback.queue[next_tail].message;
+	uint8_t  buffer    = arinc429.callback.queue[next_tail].buffer;
+	uint16_t timestamp = arinc429.callback.queue[next_tail].timestamp;
 
-	// update tail
+	// update the tail position
 	arinc429.callback.tail = next_tail;
 
-	// switch on message type
+	// switch on the message type to send
 	switch(message)
 	{
 		case ARINC429_CALLBACK_JOB_HEARTBEAT :
 
-			//create callback message
+			//create the callback message
 			tfp_make_default_header(&cb_heartbeat.header, bootloader_get_uid(), sizeof(Heartbeat_Callback), FID_CALLBACK_HEARTBEAT);
 
-			// collect callback message data
+			// collect the callback message data
+			cb_heartbeat.seq_number          = arinc429.heartbeat.seq_number;
+			cb_heartbeat.timestamp           = timestamp;
 			cb_heartbeat.frames_processed[0] = arinc429.tx_channel[0].common.frames_processed_curr;
 			cb_heartbeat.frames_processed[1] = arinc429.rx_channel[0].common.frames_processed_curr;
 			cb_heartbeat.frames_processed[2] = arinc429.rx_channel[1].common.frames_processed_curr;
 			cb_heartbeat.frames_lost[0]      = arinc429.tx_channel[0].common.frames_lost_curr;
 			cb_heartbeat.frames_lost[1]      = arinc429.rx_channel[0].common.frames_lost_curr;
 			cb_heartbeat.frames_lost[2]      = arinc429.rx_channel[1].common.frames_lost_curr;
-			cb_heartbeat.seq_number          = arinc429.heartbeat.seq_number;
 
-			// increment sequence number, skipping value 0
+			// increment the sequence number, thereby skipping the value 0
 			if(++arinc429.heartbeat.seq_number == 0)  arinc429.heartbeat.seq_number = 1;
 
-			// start transmission of callback message
+			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_heartbeat, sizeof(Heartbeat_Callback));
 
 			// ARINC429_CALLBACK_JOB_HEARTBEAT done
@@ -1199,20 +1411,21 @@ bool handle_callbacks(void)              // %%% thread D
 		case ARINC429_CALLBACK_JOB_FRAME_RX1 :  /* FALLTHROUGH */
 		case ARINC429_CALLBACK_JOB_FRAME_RX2 :
 
-			// create callback message
+			// create the callback message
 			tfp_make_default_header(&cb_frame.header, bootloader_get_uid(), sizeof(Frame_Callback), FID_CALLBACK_FRAME_MESSAGE);
 
-			// collect callback message data
+			// collect the callback message data
 			cb_frame.channel      = message & 1;
+			cb_frame.seq_number   = arinc429.callback.seq_number;
+			cb_frame.timestamp    = timestamp;
 			cb_frame.frame_status = ARINC429_FRAME_STATUS_UPDATE;
 			cb_frame.frame        = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
 			cb_frame.age          = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame_age;
-			cb_frame.seq_number   = arinc429.callback.seq_number;
 
-			// increment sequence number, skipping value 0
+			// increment the sequence number, thereby skipping the value 0
 			if(++arinc429.callback.seq_number == 0)  arinc429.callback.seq_number = 1;
 
-			// start transmission of callback message
+			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_frame, sizeof(Frame_Callback));
 
 			// ARINC429_CALLBACK_JOB_FRAME_RX* done
@@ -1222,20 +1435,21 @@ bool handle_callbacks(void)              // %%% thread D
 		case ARINC429_CALLBACK_JOB_TIMEOUT_RX1 :  /* FALLTHROUGH */
 		case ARINC429_CALLBACK_JOB_TIMEOUT_RX2 :
 
-			// create callback message
+			// create the callback message
 			tfp_make_default_header(&cb_frame.header, bootloader_get_uid(), sizeof(Frame_Callback), FID_CALLBACK_FRAME_MESSAGE);
 
-			// collect callback message data
+			// collect the callback message data
 			cb_frame.channel      = message & 1;
+			cb_frame.seq_number   = arinc429.callback.seq_number;
+			cb_frame.timestamp    = timestamp;
 			cb_frame.frame_status = ARINC429_FRAME_STATUS_TIMEOUT;
 			cb_frame.frame        = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
 			cb_frame.age          = arinc429.rx_channel[message & 1].timeout_period;
-			cb_frame.seq_number   = arinc429.callback.seq_number;
 
-			// increment sequence number, skipping value 0
+			// increment the sequence number, thereby skipping the value 0
 			if(++arinc429.callback.seq_number == 0)  arinc429.callback.seq_number = 1;
 
-			// start transmission of callback message
+			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_frame, sizeof(Frame_Callback));
 
 			// ARINC429_CALLBACK_JOB_TIMEOUT_RX* done

@@ -55,12 +55,12 @@ extern HI3593                  hi3593;
 extern const uint8_t           hi3593_input_pins[HI3593_INPUT_PINS_NUM];
 extern XMC_GPIO_PORT_t  *const hi3593_input_ports[HI3593_INPUT_PINS_NUM];
 
-void hi3593_init(void);
-void hi3593_tick(void);
+void     hi3593_tick          (void);
+void     hi3593_init_data     (void);
+void     hi3593_init_chip     (void);
+uint32_t hi3593_write_register(const uint8_t opcode, const uint8_t *data, const uint8_t length);
+uint32_t hi3593_read_register (const uint8_t opcode,       uint8_t *data, const uint8_t length);
 
-uint32_t hi3593_task_write_register(const uint8_t opcode, const uint8_t *data, const uint8_t length);
-uint32_t hi3593_task_read_register (const uint8_t opcode,       uint8_t *data, const uint8_t length);
-void     hi3593_task_init_hardware (void);
 
 /****************************************************************************/
 /* DEFINES                                                                  */
@@ -69,36 +69,38 @@ void     hi3593_task_init_hardware (void);
 // A429 SPI opcodes
 
 // hardware setup
-#define HI3593_CMD_MASTER_RESET    0x04    // master reset
-#define HI3593_CMD_WRITE_FLAG_IRQ  0x34    // discretes     setup
-#define HI3593_CMD_WRITE_ACLK_DIV  0x38    // clock divider setup
+#define HI3593_CMD_MASTER_RESET     0x04    // master reset
+#define HI3593_CMD_WRITE_FLAG_IRQ   0x34    // discretes     setup
+#define HI3593_CMD_WRITE_ACLK_DIV   0x38    // clock divider setup
 
 // TX channel
-#define HI3593_CMD_WRITE_TX1_CTRL  0x08    // general  control  - write
-#define HI3593_CMD_READ_TX1_CTRL   0x84    // general  control  - read
-#define HI3593_CMD_WRITE_TX1_FIFO  0x0C    // transmit buffer
+#define HI3593_CMD_WRITE_TX1_CTRL   0x08    // general  control  - write
+#define HI3593_CMD_READ_TX1_CTRL    0x84    // general  control  - read
+#define HI3593_CMD_WRITE_TX1_FIFO   0x0C    // transmit buffer
 
 // RX1 channel
-#define HI3593_CMD_WRITE_RX1_CTRL  0x10    // general  control - write
-#define HI3593_CMD_READ_RX1_CTRL   0x94    // general  control - read
-#define HI3593_CMD_WRITE_RX1_PRIO  0x18    // priority control - write
-#define HI3593_CMD_READ_RX1_PRIO   0x9C    // priority control - read
-#define HI3593_CMD_READ_RX1_FIFO   0xA0    // FIFO  buffer
-#define HI3593_CMD_READ_RX1_PRIO1  0xA4    // prio1 buffer
-#define HI3593_CMD_READ_RX1_PRIO2  0xA8    // prio2 buffer
-#define HI3593_CMD_READ_RX1_PRIO3  0xAC    // prio3 buffer
+#define HI3593_CMD_WRITE_RX1_CTRL   0x10    // general  control - write
+#define HI3593_CMD_READ_RX1_CTRL    0x94    // general  control - read
+#define HI3593_CMD_WRITE_RX1_PRIO   0x18    // priority control - write
+#define HI3593_CMD_READ_RX1_PRIO    0x9C    // priority control - read
+#define HI3593_CMD_WRITE_RX1_FILTER 0x14    // hardware filter  - write
+#define HI3593_CMD_READ_RX1_FIFO    0xA0    // FIFO  buffer
+#define HI3593_CMD_READ_RX1_PRIO1   0xA4    // prio1 buffer
+#define HI3593_CMD_READ_RX1_PRIO2   0xA8    // prio2 buffer
+#define HI3593_CMD_READ_RX1_PRIO3   0xAC    // prio3 buffer
 
 // RX2 channel
-#define HI3593_CMD_WRITE_RX2_CTRL  0x24    // general  control - write
-#define HI3593_CMD_READ_RX2_CTRL   0xB4    // general  control - read
-#define HI3593_CMD_WRITE_RX2_PRIO  0x2C    // priority control - write
-#define HI3593_CMD_READ_RX2_PRIO   0xBC    // priority control - read
-#define HI3593_CMD_READ_RX2_FIFO   0xC0    // FIFO  buffer
-#define HI3593_CMD_READ_RX2_PRIO1  0xC4    // prio1 buffer
-#define HI3593_CMD_READ_RX2_PRIO2  0xC8    // prio2 buffer
-#define HI3593_CMD_READ_RX2_PRIO3  0xCC    // prio3 buffer
+#define HI3593_CMD_WRITE_RX2_CTRL   0x24    // general  control - write
+#define HI3593_CMD_READ_RX2_CTRL    0xB4    // general  control - read
+#define HI3593_CMD_WRITE_RX2_PRIO   0x2C    // priority control - write
+#define HI3593_CMD_READ_RX2_PRIO    0xBC    // priority control - read
+#define HI3593_CMD_WRITE_RX2_FILTER 0x28    // hardware filter  - write
+#define HI3593_CMD_READ_RX2_FIFO    0xC0    // FIFO  buffer
+#define HI3593_CMD_READ_RX2_PRIO1   0xC4    // prio1 buffer
+#define HI3593_CMD_READ_RX2_PRIO2   0xC8    // prio2 buffer
+#define HI3593_CMD_READ_RX2_PRIO3   0xCC    // prio3 buffer
 
 
-#endif  // #ifndef HI3593_H
+#endif  // HI3593_H
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

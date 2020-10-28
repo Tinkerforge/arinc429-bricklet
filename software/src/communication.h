@@ -34,8 +34,9 @@
 /****************************************************************************/
 
 BootloaderHandleMessageResponse  handle_message(const void *data, void *response);
-void                             communication_tick(void);
-void                             communication_init(void);
+
+void communication_tick(void);
+void communication_init(void);
 
 
 /****************************************************************************/
@@ -108,6 +109,9 @@ void                             communication_init(void);
 #define ARINC429_SCHEDULER_JOB_SINGLE     2  // scheduler job code for 'single': send frame once       and dwell
 #define ARINC429_SCHEDULER_JOB_CYCLIC     3  // scheduler job code for 'cyclic': send frame repeatedly and dwell
 
+#define ARINC429_A429_MODE_NORMAL         0  // high-level A429 operations are executed
+#define ARINC429_A429_MODE_DEBUG          1  // high-level A429 operations are stopped for low-level debug access
+
 #define ARINC429_CALLBACK_JOB_NONE        0  // callback job code for 'nothing to do'
 #define ARINC429_CALLBACK_JOB_HEARTBEAT   1  // callback job code for 'heartbeat'
 #define ARINC429_CALLBACK_JOB_FRAME_RX1   2  // callback job code for 'new frame', bit 0 = 0 -> channel 1
@@ -150,37 +154,33 @@ void                             communication_init(void);
 #define FID_GET_CAPABILITIES                          4
 #define FID_SET_HEARTBEAT_CALLBACK_CONFIGURATION      5
 #define FID_GET_HEARTBEAT_CALLBACK_CONFIGURATION      6
-// see below                                          7
+#define FID_CALLBACK_HEARTBEAT                        7
 #define FID_SET_CHANNEL_CONFIGURATION                 8
 #define FID_GET_CHANNEL_CONFIGURATION                 9
 #define FID_SET_CHANNEL_MODE                         10
 #define FID_GET_CHANNEL_MODE                         11
-#define FID_CLEAR_PRIO_LABELS                        12
-#define FID_SET_PRIO_LABELS                          13
-#define FID_GET_PRIO_LABELS                          14
-#define FID_CLEAR_ALL_RX_FILTERS                     15
-#define FID_CLEAR_RX_FILTER                          16
-#define FID_SET_RX_FILTER                            17
-#define FID_GET_RX_FILTER                            18
-#define FID_READ_FRAME                               19
-#define FID_SET_RX_CALLBACK_CONFIGURATION            20
-#define FID_GET_RX_CALLBACK_CONFIGURATION            21
-// see below                                         22
-#define FID_WRITE_FRAME_DIRECT                       23
-#define FID_WRITE_FRAME_SCHEDULED                    24
-#define FID_CLEAR_SCHEDULE_ENTRIES                   25
-#define FID_SET_SCHEDULE_ENTRY                       26
-#define FID_GET_SCHEDULE_ENTRY                       27
-
-#define FID_CALLBACK_HEARTBEAT                        7
-#define FID_CALLBACK_FRAME_MESSAGE                   22
+#define FID_CLEAR_ALL_RX_FILTERS                     12
+#define FID_CLEAR_RX_FILTER                          13
+#define FID_SET_RX_STANDARD_FILTERS                  14
+#define FID_SET_RX_FILTER                            15
+#define FID_GET_RX_FILTER                            16
+#define FID_READ_FRAME                               17
+#define FID_SET_RECEIVE_CALLBACK_CONFIGURATION       18
+#define FID_GET_RECEIVE_CALLBACK_CONFIGURATION       19
+#define FID_CALLBACK_FRAME_MESSAGE                   20
+#define FID_WRITE_FRAME_DIRECT                       21
+#define FID_WRITE_FRAME_SCHEDULED                    22
+#define FID_CLEAR_SCHEDULE_ENTRIES                   23
+#define FID_SET_SCHEDULE_ENTRY                       24
+#define FID_GET_SCHEDULE_ENTRY                       25
+#define FID_RESET_A429                               26
 
 
 /****************************************************************************/
 /* DATA STRUCTURES                                                          */
 /****************************************************************************/
 
-// input & output data structures - debug level functions
+/*** input & output data structures - debug level functions ***/
 
 // debug_get_discretes()
 typedef struct {
@@ -222,7 +222,7 @@ typedef struct {
 } __attribute__((__packed__)) DebugWriteRegisterLowLevel_Response;
 
 
-// input & output data structures - user level functions
+/*** input & output data structures - user level functions ***/
 
 // get_capabilities()
 typedef struct {
@@ -230,12 +230,11 @@ typedef struct {
 } __attribute__((__packed__)) GetCapabilities;
 
 typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           rx_channels;            // number of available RX channels
-	uint16_t          rx_frame_filters;       // number of available RX frame filter storage positions
-	uint8_t           tx_channels;            // number of available TX channels
-	uint16_t          tx_schedule_entries;    // number of available TX scheduler job entries
-	uint16_t          tx_schedule_frames;     // number of available TX scheduled frames
+	TFPMessageHeader  header;                   // message header
+	uint16_t          tx_total_scheduler_tasks; // total number of  TX scheduler task entries
+	uint16_t          tx_used_scheduler_tasks;  // number of unused TX scheduler task entries
+	uint16_t          rx_total_frame_filters;   // total number of  RX frame buffers
+	uint16_t          rx_used_frame_filters[2]; // number of unused RX frame buffers
 } __attribute__((__packed__)) GetCapabilities_Response;
 
 
@@ -258,13 +257,6 @@ typedef struct {
 	bool              value_has_to_change;    // heartbeat is delayed in case values have not changed
 } __attribute__((__packed__)) GetHeartbeatCallbackConfiguration_Response;
 
-// bricklet heartbeat callback
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           seq_number;             // sequence number of the heartbeat message
-	uint16_t          frames_processed[3];  // statistics counter - processed frames
-	uint16_t          frames_lost[3];       // statistics counter - lost      frames
-} __attribute__((__packed__)) Heartbeat_Callback;
 
 // set_channel_configuration()
 typedef struct {
@@ -308,39 +300,11 @@ typedef struct {
 } __attribute__((__packed__)) GetChannelMode_Response;
 
 
-// clear_prio_labels()
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           channel;                // selected channel
-} __attribute__((__packed__)) ClearPrioLabels;
-
-
-// set_prio_labels()
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           channel;                // selected channel
-	uint8_t           label[3];               // label value for priority filter 1,2 and 3
-} __attribute__((__packed__)) SetPrioLabels;
-
-
-// get_prio_labels()
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           channel;                // selected channel
-} __attribute__((__packed__)) GetPrioLabels;
-
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	bool              prio_enabled;           // priority filters enabled / disabled
-	uint8_t           label[3];               // label value for priority filter 1,2 and 3
-} __attribute__((__packed__)) GetPrioLabels_Response;
-
-
 // clear_all_rx_filters()
 typedef struct {
 	TFPMessageHeader  header;                 // message header
 	uint8_t           channel;                // selected channel
-} __attribute__((__packed__)) ClearAllRXFilters;
+} __attribute__((__packed__)) ClearAllRXLabelFilters;
 
 
 // clear_rx_filter()
@@ -349,7 +313,19 @@ typedef struct {
 	uint8_t           channel;                // selected channel
 	uint8_t           label;                  // label code
 	uint8_t           sdi;                    // use of SDI bits
-} __attribute__((__packed__)) ClearRXFilter;
+} __attribute__((__packed__)) ClearRXLabelFilter;
+
+typedef struct {
+	TFPMessageHeader  header;                 // message header
+	bool              success;                // filter removed true/false
+} __attribute__((__packed__)) ClearRXLabelFilter_Response;
+
+
+// set_rx_standard_filters()
+typedef struct {
+	TFPMessageHeader  header;                 // message header
+	uint8_t           channel;                // selected channel
+} __attribute__((__packed__)) SetRXStandardFilters;
 
 
 // set_rx_filter()
@@ -359,6 +335,11 @@ typedef struct {
 	uint8_t           label;                  // label code
 	uint8_t           sdi;                    // use of SDI bits
 } __attribute__((__packed__)) SetRXFilter;
+
+typedef struct {
+	TFPMessageHeader  header;                 // message header
+	bool              success;                // filter created true/false
+} __attribute__((__packed__)) SetRXFilter_Response;
 
 
 // get_rx_filter()
@@ -414,15 +395,6 @@ typedef struct {
 	uint16_t          timeout;                // timeout setting
 } __attribute__((__packed__)) GetRXCallbackConfiguration_Response;
 
-// frame message callback
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           channel;                // channel on which the frame was received
-	uint8_t           seq_number;             // sequence number of the rx callback message
-	uint8_t           frame_status;           // reason for callback: ARINC429_FRAME_STATUS_TIMEOUT or ARINC429_FRAME_STATUS_UPDATE
-	uint32_t          frame;                  // complete A429 frame received (data and label) 
-	uint16_t          age;                    // time elapsed since last reception of a frame with this label and SDI, in [ms]
-} __attribute__((__packed__)) Frame_Callback;
 
 // write_frame_direct()
 typedef struct {
@@ -440,6 +412,18 @@ typedef struct {
 	uint32_t          frame;                  // complete A429 frame (data and label)
 } __attribute__((__packed__)) WriteFrameScheduled;
 
+
+// set_schedule_entry()
+typedef struct {
+	TFPMessageHeader  header;                 // message header
+	uint8_t           channel;                // selected channel
+	uint16_t          task_index;             // index number in job table
+	uint8_t           job;                    // assigned job
+	uint16_t          frame_index;            // index number in frame table selecting frame to send
+	uint8_t           dwell_time;             // time in ms to wait before executing the next job
+} __attribute__((__packed__)) SetScheduleEntry;
+
+
 // clear_schedule_entries()
 typedef struct {
 	TFPMessageHeader  header;                 // message header
@@ -448,21 +432,12 @@ typedef struct {
 	uint16_t          task_index_last;        // last  schedule entry by index number to be cleared
 } __attribute__((__packed__)) ClearScheduleEntries;
 
-// set_schedule_entry()
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           channel;                // selected channel
-	uint16_t          task_index;              // index number in job table
-	uint8_t           job;                    // assigned job
-	uint16_t          frame_index;            // index number in frame table selecting frame to send
-	uint8_t           dwell_time;             // time in ms to wait before executing the next job
-} __attribute__((__packed__)) SetScheduleEntry;
 
 // get_schedule_entry()
 typedef struct {
 	TFPMessageHeader  header;                 // message header
 	uint8_t           channel;                // selected channel: ARINC429_CHANNEL_TX1
-	uint16_t          task_index;              // index number in job table
+	uint16_t          task_index;             // index number in job table
 } __attribute__((__packed__)) GetScheduleEntry;
 
 typedef struct {
@@ -474,24 +449,56 @@ typedef struct {
 } __attribute__((__packed__)) GetScheduleEntry_Response;
 
 
+// reset()
+typedef struct {
+	TFPMessageHeader  header;                 // message header
+	uint8_t           mode;                   // A429 operations mode
+} __attribute__((__packed__)) Reset_A429;
+
+
+/*** output data structures - callbacks ***/
+
+// bricklet heartbeat callback
+#define TCN           3                       // total number of channels - copy of ARINC429_CHANNEL_TOTAL_NUM from arinc429.h
+typedef struct {
+	TFPMessageHeader  header;                 // message header
+	uint8_t           seq_number;             // sequence number of the heartbeat message
+	uint16_t          timestamp;              // time of message creation
+	uint16_t          frames_processed[TCN];  // statistics counter - processed frames
+	uint16_t          frames_lost[TCN];       // statistics counter - lost      frames
+} __attribute__((__packed__)) Heartbeat_Callback;
+
+
+// frame message callback
+typedef struct {
+	TFPMessageHeader  header;                 // message header
+	uint8_t           channel;                // channel on which the frame was received
+	uint8_t           seq_number;             // sequence number of the rx callback message
+	uint16_t          timestamp;              // time of message creation
+	uint8_t           frame_status;           // reason for callback: ARINC429_FRAME_STATUS_TIMEOUT or ARINC429_FRAME_STATUS_UPDATE
+	uint32_t          frame;                  // complete A429 frame received (data and label) 
+	uint16_t          age;                    // time elapsed since last reception of a frame with this label and SDI, in [ms]
+} __attribute__((__packed__)) Frame_Callback;
+
 
 /****************************************************************************/
 /* PROTOTYPES                                                               */
 /****************************************************************************/
 
-// Function prototypes - internal functions
+/*** function prototypes - internal functions ***/
 
-bool enqueue_message(uint8_t message_type, uint8_t buffer);
+bool check_sw_filter_map(uint8_t channel_index, uint16_t ext_label);
+bool enqueue_message    (uint8_t message_type,  uint16_t timestamp, uint8_t buffer);
 
 
-// Function prototypes - debug level
+/*** function prototypes - debug level ***/
 
 BootloaderHandleMessageResponse debug_get_discretes                 (const DebugGetDiscretes                 *data, DebugGetDiscretes_Response                 *response);
 BootloaderHandleMessageResponse debug_read_register_low_level       (const DebugReadRegisterLowLevel         *data, DebugReadRegisterLowLevel_Response         *response);
 BootloaderHandleMessageResponse debug_write_register_low_level      (const DebugWriteRegisterLowLevel        *data, DebugWriteRegisterLowLevel_Response        *response);
 
 
-// Function prototypes - user level
+/*** function prototypes - user level ***/
 
 BootloaderHandleMessageResponse get_capabilities                    (const GetCapabilities                   *data, GetCapabilities_Response                   *response);
 
@@ -504,13 +511,10 @@ BootloaderHandleMessageResponse get_channel_configuration           (const GetCh
 BootloaderHandleMessageResponse set_channel_mode                    (const SetChannelMode                    *data                                                      );
 BootloaderHandleMessageResponse get_channel_mode                    (const GetChannelMode                    *data, GetChannelMode_Response                    *response);
 
-BootloaderHandleMessageResponse clear_prio_labels                   (const ClearPrioLabels                   *data                                                      );
-BootloaderHandleMessageResponse set_prio_labels                     (const SetPrioLabels                     *data                                                      );
-BootloaderHandleMessageResponse get_prio_labels                     (const GetPrioLabels                     *data, GetPrioLabels_Response                     *response);
-
-BootloaderHandleMessageResponse clear_all_rx_filters                (const ClearAllRXFilters                 *data                                                      );
-BootloaderHandleMessageResponse clear_rx_filter                     (const ClearRXFilter                     *data                                                      );
-BootloaderHandleMessageResponse set_rx_filter                       (const SetRXFilter                       *data                                                      );
+BootloaderHandleMessageResponse clear_all_rx_filters                (const ClearAllRXLabelFilters            *data                                                      );
+BootloaderHandleMessageResponse clear_rx_filter                     (const ClearRXLabelFilter                *data, ClearRXLabelFilter_Response                *response);
+BootloaderHandleMessageResponse set_rx_standard_filters             (const SetRXStandardFilters              *data                                                      );
+BootloaderHandleMessageResponse set_rx_filter                       (const SetRXFilter                       *data, SetRXFilter_Response                       *response);
 BootloaderHandleMessageResponse get_rx_filter                       (const GetRXFilter                       *data, GetRXFilter_Response                       *response);
 
 BootloaderHandleMessageResponse read_frame                          (const ReadFrame                         *data, ReadFrame_Response                         *response);
@@ -525,17 +529,20 @@ BootloaderHandleMessageResponse clear_schedule_entries              (const Clear
 BootloaderHandleMessageResponse set_schedule_entry                  (const SetScheduleEntry                  *data                                                      );
 BootloaderHandleMessageResponse get_schedule_entry                  (const GetScheduleEntry                  *data, GetScheduleEntry_Response                  *response);
 
+BootloaderHandleMessageResponse reset_a429                          (const Reset_A429                        *data                                                      );
 
-// Callbacks
 
-bool handle_callbacks  (void);
+/*** function prototypes - callbacks ***/
+
+bool handle_callbacks(void);
 
 #define COMMUNICATION_CALLBACK_TICK_WAIT_MS  1
-#define COMMUNICATION_CALLBACK_HANDLER_NUM   1   // TODO the generator creates 2 handlers, but the code does all callback processing with one handler only!
+#define COMMUNICATION_CALLBACK_HANDLER_NUM   1
 
 #define COMMUNICATION_CALLBACK_LIST_INIT \
 	handle_callbacks, \
 
-#endif  // #ifndef COMMUNICATION_H
+
+#endif  // COMMUNICATION_H
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
