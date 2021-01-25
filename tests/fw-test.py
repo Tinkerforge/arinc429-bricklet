@@ -26,8 +26,13 @@ def heartbeat_cb(seq_number, timestamp, frames_processed, frames_lost) :
 #callback function for the frame message
 def frame_cb(channel, seq_number, timestamp, status, frame, age) :
 
-    print('new Frame #', seq_number, ' channel =', channel, ' status =', status, ' frame =', frame, ' age =', age, 'ms', ' timestamp =', timestamp)   
+    print('new Frame #', seq_number, ' channel =', channel, ' status =', status, ' frame =', frame, ' age =', age, 'ms', ' timestamp =', timestamp)
 
+
+#callback function for the scheduler message
+def scheduler_cb(channel, seq_number, timestamp, token) :
+
+    print('Scheduler #', seq_number, ' channel =', channel, ' token =', token, ' timestamp =', timestamp)  
 
 
 # main function
@@ -39,8 +44,8 @@ if __name__ == "__main__":
     ipcon.connect(HOST, PORT)            # connect to brickd (don't use device before ipcon is connected)
 
 
-    # for whatever happened before: reset ARINC429 bricklet to normal operation mode
-    a429.reset_a429(mode = a429.A429_MODE_NORMAL)
+    # for whatever happened before: reset the ARINC429 bricklet
+    a429.restart()
 
 
     #################################################################
@@ -52,8 +57,8 @@ if __name__ == "__main__":
 
     ret = a429.get_capabilities()
 
-    print('TX Scheduler Tasks total/used:', ret.tx_total_scheduler_tasks, '/', ret.tx_used_scheduler_tasks)
-    print('RX Frame Filters   total/used:', ret.rx_total_frame_filters,   '/', ret.rx_used_frame_filters  )
+    print('TX Scheduler Jobs total/used:', ret.tx_total_scheduler_jobs, '/', ret.tx_used_scheduler_jobs)
+    print('RX Frame Filters  total/used:', ret.rx_total_frame_filters,  '/', ret.rx_used_frame_filters )
 
 
     #################################################################    
@@ -214,52 +219,52 @@ if __name__ == "__main__":
 
     # write schedule
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 0,                         \
+                            job_index   = 0,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 0,                         \
                             dwell_time  = dwell1)
    
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 1,                         \
+                            job_index   = 1,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 1,                         \
                             dwell_time  = dwell2)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 2,                         \
+                            job_index   = 2,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 2,                         \
                             dwell_time  = dwell31)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 3,                         \
+                            job_index   = 3,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 3,                         \
                             dwell_time  = dwell32)   
 
     # comment next line in to send only label 1
-    # a429.clear_schedule_entries(channel = a429.CHANNEL_TX, task_index_first = 1, task_index_last = 3)
-    
+    # a429.clear_schedule_entries(channel = a429.CHANNEL_TX, job_index_first = 1, job_index_last = 3)
+
     print('wrote schedule')
 
     # read-back schedule
-    ret1 = a429.get_schedule_entry(a429.CHANNEL_TX1, task_index = 0)
-    ret2 = a429.get_schedule_entry(a429.CHANNEL_TX1, task_index = 1)
-    ret3 = a429.get_schedule_entry(a429.CHANNEL_TX1, task_index = 2)
-    ret4 = a429.get_schedule_entry(a429.CHANNEL_TX1, task_index = 3)    
+    ret1 = a429.get_schedule_entry(a429.CHANNEL_TX1, job_index  = 0)
+    ret2 = a429.get_schedule_entry(a429.CHANNEL_TX1, job_index  = 1)
+    ret3 = a429.get_schedule_entry(a429.CHANNEL_TX1, job_index  = 2)
+    ret4 = a429.get_schedule_entry(a429.CHANNEL_TX1, job_index  = 3)    
 
     print('schedule read-back:')
-    print('Task 1: job =', ret1.job, ' Frame =', ret1.frame, ' dwell-time =', ret1.dwell_time, ' ms')
-    print('Task 2: job =', ret2.job, ' Frame =', ret2.frame, ' dwell-time =', ret2.dwell_time, ' ms')
-    print('Task 3: job =', ret3.job, ' Frame =', ret3.frame, ' dwell-time =', ret3.dwell_time, ' ms')
-    print('Task 4: job =', ret4.job, ' Frame =', ret4.frame, ' dwell-time =', ret4.dwell_time, ' ms')
+    print('Job 1: job =', ret1.job, ' Frame =', ret1.frame, ' dwell-time =', ret1.dwell_time, ' ms')
+    print('Job 2: job =', ret2.job, ' Frame =', ret2.frame, ' dwell-time =', ret2.dwell_time, ' ms')
+    print('Job 3: job =', ret3.job, ' Frame =', ret3.frame, ' dwell-time =', ret3.dwell_time, ' ms')
+    print('Job 4: job =', ret4.job, ' Frame =', ret4.frame, ' dwell-time =', ret4.dwell_time, ' ms')
 
     # read capabilities (resource usage)
     ret = a429.get_capabilities()
 
     print('\nResource Usage now:')
-    print('TX Scheduler Tasks total/used:', ret.tx_total_scheduler_tasks, '/', ret.tx_used_scheduler_tasks)
-    print('RX Frame Filters   total/used:', ret.rx_total_frame_filters,   '/', ret.rx_used_frame_filters  )
+    print('TX Scheduler Jobs total/used:', ret.tx_total_scheduler_jobs, '/', ret.tx_used_scheduler_jobs)
+    print('RX Frame Filters  total/used:', ret.rx_total_frame_filters,  '/', ret.rx_used_frame_filters )
 
 
     input("\npress <enter> key to start the TX scheduler...\n") # use raw_input() in Python 2
@@ -387,15 +392,15 @@ if __name__ == "__main__":
     print('--------')
 
     # clear TX schedule
-    a429.clear_schedule_entries(channel = a429.CHANNEL_TX, task_index_first = 0, task_index_last = 511)
+    a429.clear_schedule_entries(channel = a429.CHANNEL_TX, job_index_first = 0, job_index_last = 511)
     print('cleared complete TX schedule')
 
     # read capabilities (resource usage)
     ret = a429.get_capabilities()
 
     print('\nResource Usage now:')
-    print('TX Scheduler Tasks total/used:', ret.tx_total_scheduler_tasks, '/', ret.tx_used_scheduler_tasks)
-    print('RX Frame Filters   total/used:', ret.rx_total_frame_filters,   '/', ret.rx_used_frame_filters  )
+    print('TX Scheduler Jobs total/used:', ret.tx_total_scheduler_jobs, '/', ret.tx_used_scheduler_jobs)
+    print('RX Frame Filters  total/used:', ret.rx_total_frame_filters,  '/', ret.rx_used_frame_filters )
 
 
     #################################################################
@@ -437,23 +442,32 @@ if __name__ == "__main__":
 
 
     #################################################################
-    # Test 14 - schedule with single transmits
+    # Test 14 - schedule with single transmit & callback
     #################################################################
 
     print('\nscheduled single-transmits')
     print('--------------------------')
 
+    # register callback function
+    a429.register_callback(a429.CALLBACK_SCHEDULER_MESSAGE, scheduler_cb)
+
     # create the schedule
-    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 0,                         \
-                            job         = a429.SCHEDULER_JOB_SINGLE, \
-                            frame_index = 0,                         \
+    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,            \
+                            job_index   = 0,                          \
+                            job         = a429.SCHEDULER_JOB_SINGLE,  \
+                            frame_index = 0,                          \
                             dwell_time  = 0)
 
-    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 1,                         \
-                            job         = a429.SCHEDULER_JOB_DWELL,  \
-                            frame_index = 0,                         \
+    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,            \
+                            job_index   = 1,                          \
+                            job         = a429.SCHEDULER_JOB_CALLBACK,\
+                            frame_index = 42,                         \
+                            dwell_time  = 0)
+
+    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,            \
+                            job_index   = 2,                          \
+                            job         = a429.SCHEDULER_JOB_DWELL,   \
+                            frame_index = 0,                          \
                             dwell_time  = 100)
 
     # clear the TX buffer (frames with value 0 will not be transmitted in JOB_SINGLE mode)
@@ -484,7 +498,18 @@ if __name__ == "__main__":
     time.sleep(5)
 
     # stop scheduler
-    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_ACTIVE)
+    # a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_ACTIVE)
+
+    # make scheduler stop itself
+    print('putting a stop command into the schedule')
+    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,          \
+                            job_index   = 0,                        \
+                            job         = a429.SCHEDULER_JOB_STOP,  \
+                            frame_index = 0,                        \
+                            dwell_time  = 0)
+
+    time.sleep(5)
+
     print('scheduler stopped')
 
 
@@ -497,13 +522,13 @@ if __name__ == "__main__":
 
     # change schedule to retransmit
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,                \
-                            task_index  = 0,                              \
+                            job_index   = 0,                              \
                             job         = a429.SCHEDULER_JOB_RETRANS_RX1, \
                             frame_index = 10,                             \
                             dwell_time  = 0)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 1,                         \
+                            job_index   = 1,                         \
                             job         = a429.SCHEDULER_JOB_DWELL,  \
                             frame_index = 0,                         \
                             dwell_time  = 200)
@@ -511,10 +536,10 @@ if __name__ == "__main__":
     print('scheduler is set up for a retransmit of label 10 received on RX1')
 
     # start scheduler & clear statistics counters
-    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_PASSIVE)
-    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_RUN    )
     a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_PASSIVE)
     a429.set_channel_mode(channel = a429.CHANNEL_RX, mode = a429.CHANNEL_MODE_ACTIVE )
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_PASSIVE)
+    a429.set_channel_mode(channel = a429.CHANNEL_TX, mode = a429.CHANNEL_MODE_RUN    )
     print('scheduler started, statistics counters are cleared')
 
     print('waiting 5 seconds...')
@@ -543,7 +568,7 @@ if __name__ == "__main__":
     print('cleared all RX filters')
 
     # clear TX schedule
-    a429.clear_schedule_entries(channel = a429.CHANNEL_TX, task_index_first = 0, task_index_last = 511)
+    a429.clear_schedule_entries(channel = a429.CHANNEL_TX, job_index_first = 0, job_index_last = 511)
     print('cleared complete TX schedule')
 
     # set mode to passive

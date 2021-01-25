@@ -39,8 +39,8 @@ if __name__ == "__main__":
     ipcon.connect(HOST, PORT)            # connect to brickd (don't use device before ipcon is connected)
 
 
-    # for whatever happened before: reset ARINC429 bricklet to normal operation mode
-    a429.reset_a429(mode = a429.A429_MODE_NORMAL)
+    # for whatever happened before: reset the ARINC429 bricklet
+    a429.restart()
 
 
     #################################################################    
@@ -70,8 +70,8 @@ if __name__ == "__main__":
 
 
     # write frames
-    a429.write_frame_scheduled(channel = a429.CHANNEL_TX, frame_index = 0, frame = frame1 )
-    a429.write_frame_scheduled(channel = a429.CHANNEL_TX, frame_index = 1, frame = frame2 )
+    a429.write_frame_scheduled(channel = a429.CHANNEL_TX, frame_index = 0, frame = frame1)
+    a429.write_frame_scheduled(channel = a429.CHANNEL_TX, frame_index = 1, frame = frame2)
 
     # in high speed mode a single frame including inter-frame-gap takes 0.36 ms
     # schedule: 6x frame1, 5x frame2 -> total time of one schedule cycle is 11 * 0.36 ms = 3.96 ms
@@ -80,71 +80,78 @@ if __name__ == "__main__":
     dwell = 4
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 0,                         \
+                            job_index   = 0,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 0,                         \
                             dwell_time  = 0)
    
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 1,                         \
+                            job_index   = 1,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 0,                         \
                             dwell_time  = 0)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 2,                         \
+                            job_index   = 2,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 0,                         \
                             dwell_time  = 0)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 3,                         \
+                            job_index   = 3,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 0,                         \
                             dwell_time  = 0)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 4,                         \
+                            job_index   = 4,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 0,                         \
                             dwell_time  = 0)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 5,                         \
+                            job_index   = 5,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 0,                         \
                             dwell_time  = 0)
 
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 6,                         \
+                            job_index   = 6,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 1,                         \
                             dwell_time  = 0)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 7,                         \
+                            job_index   = 7,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 1,                         \
                             dwell_time  = 0)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 8,                         \
+                            job_index   = 8,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 1,                         \
                             dwell_time  = 0)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 9,                         \
+                            job_index   = 9,                         \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 1,                         \
                             dwell_time  = 0)
 
     a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
-                            task_index  = 10,                        \
+                            job_index   = 10,                        \
                             job         = a429.SCHEDULER_JOB_CYCLIC, \
                             frame_index = 1,                         \
                             dwell_time  = dwell)
+
+    a429.set_schedule_entry(channel     = a429.CHANNEL_TX,           \
+                            job_index   = 11,                        \
+                            job         = a429.SCHEDULER_JOB_JUMP,   \
+                            frame_index = 0,                         \
+                            dwell_time  = 0)
+
 
     print('wrote TX frames and schedule')
     
@@ -222,7 +229,7 @@ if __name__ == "__main__":
     print('\nstopped callbacks')
 
     # clear TX schedule
-    a429.clear_schedule_entries(channel = a429.CHANNEL_TX, task_index_first = 0, task_index_last = 511)
+    a429.clear_schedule_entries(channel = a429.CHANNEL_TX, job_index_first = 0, job_index_last = 1199)
     print('cleared complete TX schedule')
 
     # clear RX filters
