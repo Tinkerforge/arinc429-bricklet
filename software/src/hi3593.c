@@ -37,7 +37,8 @@
 HI3593  hi3593;
 
 // pin and port numbers to interface with the discrete signals of the A429 chip
-const uint8_t hi3593_input_pins[HI3593_INPUT_PINS_NUM] = {
+const uint8_t hi3593_input_pins[HI3593_INPUT_PINS_NUM] =
+{
 	HI3593_MB11_PIN,
 	HI3593_MB12_PIN,
 	HI3593_MB13_PIN,
@@ -52,7 +53,8 @@ const uint8_t hi3593_input_pins[HI3593_INPUT_PINS_NUM] = {
 	HI3593_TFULL_PIN
 };
 
-XMC_GPIO_PORT_t *const hi3593_input_ports[HI3593_INPUT_PINS_NUM] = {
+XMC_GPIO_PORT_t *const hi3593_input_ports[HI3593_INPUT_PINS_NUM] =
+{
 	HI3593_MB11_PORT,
 	HI3593_MB12_PORT,
 	HI3593_MB13_PORT,
@@ -173,7 +175,7 @@ void hi3593_init_chip(void)
 uint32_t hi3593_write_register(const uint8_t opcode, const uint8_t *data, const uint8_t length)
 {
 	// create buffer and load opcode
-	uint8_t opcode_and_data[257] = {opcode};               // TODO size 257 needed? can reduce?
+	uint8_t opcode_and_data[33] = {opcode};		// 1 byte opcode + 32 byte data
 
 	// copy data from input to buffer
 	memcpy(opcode_and_data+1, data, length);
@@ -190,7 +192,7 @@ uint32_t hi3593_write_register(const uint8_t opcode, const uint8_t *data, const 
 uint32_t hi3593_read_register(const uint8_t opcode, uint8_t *data, const uint8_t length)
 {
 	// create buffer and load opcode
-	uint8_t opcode_and_data[257] = {(1 << 7) | opcode};    // TODO size 257 needed? can reduce?
+	uint8_t opcode_and_data[33] = {(1 << 7) | opcode};		// 1 byte opcode + 32 byte data
 
 	// execute SPI transfer
 	const bool ret = spi_fifo_coop_transceive(&hi3593.spi_fifo, length+1, opcode_and_data, opcode_and_data);

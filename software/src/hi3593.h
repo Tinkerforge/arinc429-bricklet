@@ -34,8 +34,8 @@
 /* DATA STRUCTURES                                                          */
 /****************************************************************************/
 
-typedef struct {
-
+typedef struct
+{
 	// RX / TX LEDs
 	LEDFlickerState led_flicker_state_rx;
 	LEDFlickerState led_flicker_state_tx;

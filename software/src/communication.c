@@ -68,10 +68,6 @@ BootloaderHandleMessageResponse handle_message(const void *message, void *respon
 {
 	switch(tfp_get_fid_from_message(message))
 	{
-		case FID_DEBUG_GET_DISCRETES                  : return debug_get_discretes                  (message, response);
-		case FID_DEBUG_READ_REGISTER_LOW_LEVEL        : return debug_read_register_low_level        (message, response);
-		case FID_DEBUG_WRITE_REGISTER_LOW_LEVEL       : return debug_write_register_low_level       (message, response);
-
 		case FID_GET_CAPABILITIES                     : return get_capabilities                     (message, response);
 
 		case FID_SET_HEARTBEAT_CALLBACK_CONFIGURATION : return set_heartbeat_callback_configuration (message          );
@@ -101,7 +97,7 @@ BootloaderHandleMessageResponse handle_message(const void *message, void *respon
 		case FID_SET_SCHEDULE_ENTRY                   : return set_schedule_entry                   (message          );
 		case FID_GET_SCHEDULE_ENTRY                   : return get_schedule_entry                   (message, response);
 
-		case FID_RESET_A429                           : return reset_a429                           (message          );
+		case FID_RESTART                              : return restart                              (message          );
 
 		default                                       : return HANDLE_MESSAGE_RESPONSE_NOT_SUPPORTED;
 	}
@@ -155,7 +151,7 @@ bool check_sw_filter_map(uint8_t channel_index, uint16_t ext_label)
 }
 
 
-/* update the software filter map                        */
+/* update the software filter map */
 void update_sw_filter_map(uint8_t channel_index, uint16_t ext_label, uint8_t task)
 {
 	// get the lower 5 bits from the extended label (SDI + label)
@@ -414,130 +410,6 @@ bool set_rx_filter_helper(uint8_t channel_index, uint8_t label, uint8_t sdi)
 /* message handlers                                                         */
 /****************************************************************************/
 
-/*** debug functions ****/
-
-/* get status of the discretes */
-BootloaderHandleMessageResponse debug_get_discretes(const DebugGetDiscretes *data, DebugGetDiscretes_Response *response)
-{
-	// prepare the response
-	response->header.length = sizeof(DebugGetDiscretes_Response);
-
-	// assemble the response data
-	response->rx_discretes  = (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_R1INT_INDEX],  hi3593_input_pins[HI3593_R1INT_INDEX] ) << 0) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_R1FLAG_INDEX], hi3593_input_pins[HI3593_R1FLAG_INDEX]) << 1) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_MB13_INDEX],   hi3593_input_pins[HI3593_MB13_INDEX]  ) << 2) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_MB12_INDEX],   hi3593_input_pins[HI3593_MB12_INDEX]  ) << 3) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_MB11_INDEX],   hi3593_input_pins[HI3593_MB11_INDEX]  ) << 4) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_R2INT_INDEX],  hi3593_input_pins[HI3593_R2INT_INDEX] ) << 5) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_R2FLAG_INDEX], hi3593_input_pins[HI3593_R2FLAG_INDEX]) << 6) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_MB23_INDEX],   hi3593_input_pins[HI3593_MB23_INDEX]  ) << 7) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_MB22_INDEX],   hi3593_input_pins[HI3593_MB22_INDEX]  ) << 8) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_MB21_INDEX],   hi3593_input_pins[HI3593_MB21_INDEX]  ) << 9);
-
-	response->tx_discretes  = (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_TEMPTY_INDEX], hi3593_input_pins[HI3593_TEMPTY_INDEX]) << 0) |
-	                          (XMC_GPIO_GetInput(hi3593_input_ports[HI3593_TFULL_INDEX],  hi3593_input_pins[HI3593_TFULL_INDEX] ) << 1);
-
-	// done, send response
-	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
-}
-
-
-/* execute a SPI read access to the A429 chip */
-BootloaderHandleMessageResponse debug_read_register_low_level(const DebugReadRegisterLowLevel          *data,
-                                                                    DebugReadRegisterLowLevel_Response *response)
-{
-	// prepare the response
-	response->header.length = sizeof(DebugReadRegisterLowLevel_Response);
-
-	// check the opcode
-	if(opcode_length[data->op_code] < 0)
-	{
-		// invalid opcode
-		response->rw_error     = ARINC429_RW_ERROR_INVALID_OP_CODE;
-		response->value_length = 0;
-	}
-	else if((data->op_code & (1 << 7)) == 0)
-	{
-		// opcode does not belong to a read function
-		response->rw_error     = ARINC429_RW_ERROR_NO_READ;
-		response->value_length = 0;
-	}
-	else
-	{
-		// opcode ok, execute a read access
-		uint32_t ret = hi3593_read_register(data->op_code, response->value_data, opcode_length[data->op_code]);
-
-		// was the read successful?
-		if(ret == 0)
-		{
-			// yes, collect further response data
-			response->rw_error     = ARINC429_RW_ERROR_OK;
-			response->value_length = opcode_length[data->op_code];
-		}
-		else
-		{
-			// no, set response data accordingly
-			response->rw_error     = ARINC429_RW_ERROR_SPI;
-			response->value_length = 0;
-		}
-	}
-
-	// done, send response
-	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
-}
-
-
-/* execute a SPI write access to the A429 chip */
-BootloaderHandleMessageResponse debug_write_register_low_level(const DebugWriteRegisterLowLevel          *data,
-                                                                     DebugWriteRegisterLowLevel_Response *response)
-{
-	// check the value_legth parameter, abort if invalid
-	if(data->value_length > 32)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-
-	// prepare the response
-	response->header.length = sizeof(DebugWriteRegisterLowLevel_Response);
-
-	// check the opcode
-	if(opcode_length[data->op_code] < 0)
-	{
-		// invalid opcode
-		response->rw_error = ARINC429_RW_ERROR_INVALID_OP_CODE;
-	}
-	else if(data->op_code & (1 << 7))
-	{
-		// opcode does not belong to a write function
-		response->rw_error = ARINC429_RW_ERROR_NO_WRITE;
-	}
-	else if(opcode_length[data->op_code] != data->value_length)
-	{
-		// the number of data bytes provided does not match with opcode
-		response->rw_error = ARINC429_RW_ERROR_INVALID_LENGTH;
-	}
-	else
-	{
-		// execute a write access
-		uint32_t ret = hi3593_write_register(data->op_code, data->value_data, opcode_length[data->op_code]);
-
-		// was the write successful?
-		if(ret == 0)
-		{
-			// yes, write access succeeded
-			response->rw_error = ARINC429_RW_ERROR_OK;
-		}
-		else
-		{
-			// no, write access failed
-			response->rw_error = ARINC429_RW_ERROR_SPI;
-		}
-	}
-
-	// done, send response
-	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
-}
-
-
-/*** user-level functions ****/
-
 
 /* get the capabilities of the bricklet */
 BootloaderHandleMessageResponse get_capabilities(const GetCapabilities          *data,
@@ -547,8 +419,8 @@ BootloaderHandleMessageResponse get_capabilities(const GetCapabilities          
 	response->header.length      = sizeof(GetCapabilities_Response);
 
 	// collect the response data
-	response->tx_total_scheduler_tasks = ARINC429_TX_TASKS_NUM;                       // total number of TX  scheduler task entries
-	response->tx_used_scheduler_tasks  = arinc429.tx_channel[0].scheduler_tasks_used; // number of used  TX  scheduler task entries
+	response->tx_total_scheduler_jobs = ARINC429_TX_JOBS_NUM;                         // total number of TX  scheduler job entries
+	response->tx_used_scheduler_jobs  = arinc429.tx_channel[0].scheduler_jobs_used;   // number of used  TX  scheduler job entries
 
 	// the number of frame filters is limited by the number of frame buffers
 	response->rx_total_frame_filters   = ARINC429_RX_BUFFER_NUM;                      // total number of RX  frame filters
@@ -1156,7 +1028,7 @@ BootloaderHandleMessageResponse write_frame_direct(const WriteFrameDirect *data)
 			ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
 
 			// compute the next head position
-			next_head = (channel->head + 1) & (ARINC429_TX_QUEUE_SIZE - 1);
+			if(++next_head >= ARINC429_TX_QUEUE_SIZE) next_head = 0;
 
 			// is the immediate transmit queue able to accept a frame?
 			if(next_head == channel->tail)
@@ -1195,6 +1067,9 @@ BootloaderHandleMessageResponse write_frame_scheduled(const WriteFrameScheduled 
 		{
 			// yes, store frame in the TX frame table
 			arinc429.tx_channel[i].frame_buffer[data->frame_index] = data->frame;
+
+			// eligible the frame for transmit
+			update_tx_buffer_map(i, data->frame_index, ARINC429_SET);
 		}
 	}
 
@@ -1207,10 +1082,10 @@ BootloaderHandleMessageResponse write_frame_scheduled(const WriteFrameScheduled 
 BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntries *data)
 {
 	// check the parameters, abort if invalid
-	if(!check_channel(data->channel, GROUP_TX)         )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-	if( data->task_index_first >= ARINC429_TX_TASKS_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-	if( data->task_index_first >  data->task_index_last)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-	if( data->task_index_last  >= ARINC429_TX_TASKS_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if(!check_channel(data->channel, GROUP_TX)       )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if( data->job_index_first >= ARINC429_TX_JOBS_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if( data->job_index_first >  data->job_index_last)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if( data->job_index_last  >= ARINC429_TX_JOBS_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
 	// do all TX channels
 	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
@@ -1222,7 +1097,7 @@ BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntrie
 			ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
 
 			// clear the task entries (this can be done while the scheduler is running)
-			for(uint16_t j = data->task_index_first; j <= data->task_index_last; j++)
+			for(uint16_t j = data->job_index_first; j <= data->job_index_last; j++)
 			{
 				// is the task already unused?
 				if((channel->job_frame[j] & ARINC429_TX_JOB_JOBCODE_MASK) != (ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS))
@@ -1231,7 +1106,7 @@ BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntrie
 					channel->job_frame[j] = ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS;
 
 					// decrement the number of used task entries
-					channel->scheduler_tasks_used--;
+					channel->scheduler_jobs_used--;
 				}
 			}
 		}
@@ -1247,20 +1122,39 @@ BootloaderHandleMessageResponse set_schedule_entry(const SetScheduleEntry *data)
 {
 	// check the parameters, abort if invalid
 	if(!check_channel(data->channel, GROUP_TX)                  )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-	if( data->task_index   >= ARINC429_TX_TASKS_NUM             )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if( data->job_index    >= ARINC429_TX_JOBS_NUM              )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->job          >  ARINC429_SCHEDULER_JOB_RETRANS_RX2)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 	if( data->dwell_time   >  250                               )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
-	// check frame index parameter
-	if(data->job < ARINC429_SCHEDULER_JOB_RETRANS_RX1)
+	// check the frame index parameter
+	switch(data->job)
 	{
-		// abort on invalid TX frame table index
-		if(data->frame_index >= ARINC429_TX_BUFFER_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
-	}
-	else
-	{
-		// abort on invalid extended label (SDI + label)
-		if(data->frame_index >  0x03FF                )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+		// transmit from TX frame buffer - abort on invalid TX frame table index
+		case ARINC429_SCHEDULER_JOB_SINGLE      : /* FALLTHROUGH */
+		case ARINC429_SCHEDULER_JOB_CYCLIC      :
+
+			if(data->frame_index < ARINC429_TX_BUFFER_NUM) break; else return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
+
+		// transmit from RX frame buffer - abort on invalid extended label (SDI + label)
+		case ARINC429_SCHEDULER_JOB_RETRANS_RX1 : /* FALLTHROUGH */
+		case ARINC429_SCHEDULER_JOB_RETRANS_RX2 :
+
+			if(data->frame_index < 0x0400                ) break; else return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
+
+		// callback label - abort on invalid label number
+		case ARINC429_SCHEDULER_JOB_CALLBACK    :
+
+			if(data->frame_index < 0x0100                ) break; else return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
+		// jump command
+		case ARINC429_SCHEDULER_JOB_JUMP        :
+
+			if(data->frame_index < ARINC429_TX_JOBS_NUM  ) break; else return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
+		// any other job not using the frame index parameter
+		default:                                           break;
 	}
 
 	// do all TX channels
@@ -1273,15 +1167,15 @@ BootloaderHandleMessageResponse set_schedule_entry(const SetScheduleEntry *data)
 			ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
 
 			// is the task in use already?
-			if((channel->job_frame[data->task_index] & ARINC429_TX_JOB_JOBCODE_MASK) == (ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS))
+			if((channel->job_frame[data->job_index] & ARINC429_TX_JOB_JOBCODE_MASK) == (ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS))
 			{
 				// no, increment the number of used task entries
-				channel->scheduler_tasks_used++;
+				channel->scheduler_jobs_used++;
 			}
 
 			// update the task table
-			channel->dwell_time[data->task_index] = data->dwell_time;
-			channel->job_frame [data->task_index] = (data->job << ARINC429_TX_JOB_JOBCODE_POS) | (data->frame_index << ARINC429_TX_JOB_INDEX_POS);
+			channel->dwell_time[data->job_index] = data->dwell_time;
+			channel->job_frame [data->job_index] = (data->job << ARINC429_TX_JOB_JOBCODE_POS) | (data->frame_index << ARINC429_TX_JOB_INDEX_POS);
 		}
 	}
 
@@ -1300,7 +1194,7 @@ BootloaderHandleMessageResponse get_schedule_entry(const GetScheduleEntry       
 	response->header.length = sizeof(GetScheduleEntry_Response);
 
 	// check the parameter, abort if invalid
-	if(data->task_index >= ARINC429_TX_TASKS_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if(data->job_index >= ARINC429_TX_JOBS_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
 
 	// pick the selected channel
 	switch(data->channel)
@@ -1311,10 +1205,10 @@ BootloaderHandleMessageResponse get_schedule_entry(const GetScheduleEntry       
 	}
 
 	// collect the response data
-	response->job         = (channel->job_frame[data->task_index] & ARINC429_TX_JOB_JOBCODE_MASK) >> ARINC429_TX_JOB_JOBCODE_POS;
-	response->frame_index = (channel->job_frame[data->task_index] & ARINC429_TX_JOB_INDEX_MASK  ) >> ARINC429_TX_JOB_INDEX_POS;
+	response->job         = (channel->job_frame[data->job_index] & ARINC429_TX_JOB_JOBCODE_MASK) >> ARINC429_TX_JOB_JOBCODE_POS;
+	response->frame_index = (channel->job_frame[data->job_index] & ARINC429_TX_JOB_INDEX_MASK  ) >> ARINC429_TX_JOB_INDEX_POS;
 
-	response->dwell_time  = (response->job == ARINC429_SCHEDULER_JOB_SKIP) ? 0 : channel->dwell_time  [data->task_index     ];
+	response->dwell_time  = (response->job == ARINC429_SCHEDULER_JOB_SKIP) ? 0 : channel->dwell_time  [data->job_index     ];
 	response->frame       = (response->job == ARINC429_SCHEDULER_JOB_SKIP) ? 0 : channel->frame_buffer[response->frame_index];
 
 	// done, send the response
@@ -1322,17 +1216,14 @@ BootloaderHandleMessageResponse get_schedule_entry(const GetScheduleEntry       
 }
 
 
-/* reset A429 operations */
-BootloaderHandleMessageResponse reset_a429(const Reset_A429 *data)
+/* restart the bricklet */
+BootloaderHandleMessageResponse restart(const Restart *data)
 {
-	// check the parameter, abort if invalid
-	if(data->mode > ARINC429_A429_MODE_DEBUG)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+//	// request a reset of the A429 data structure and chip
+//	arinc429.system.change_request |= (ARINC429_SYSTEM_RESET_A429_DATA | ARINC429_SYSTEM_RESET_A429_CHIP);
 
-	// set the new operating mode
-	arinc429.system.operating_mode = data->mode;
-
-	// request a reset of the A429 data structure and chip
-	arinc429.system.change_request |= (ARINC429_SYSTEM_RESET_A429_DATA | ARINC429_SYSTEM_RESET_A429_CHIP);
+	// request a complete reset of everything
+	arinc429.system.change_request = 0xFF;
 
 	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
@@ -1346,10 +1237,11 @@ BootloaderHandleMessageResponse reset_a429(const Reset_A429 *data)
 // enqueue a callback message
 bool enqueue_message(uint8_t message, uint16_t timestamp, uint8_t buffer)
 {
-	uint8_t next_head;  // next head position in callback queue
+	// get the current head position in the callback queue
+	uint16_t next_head = arinc429.callback.head;
 
 	// compute the next head position
-	next_head = (arinc429.callback.head + 1) & (ARINC429_CB_QUEUE_SIZE - 1);
+	if(++next_head >= ARINC429_CB_QUEUE_SIZE) next_head = 0;
 
 	// abort if there is no free space in the message queue
 	if(next_head == arinc429.callback.tail)  return false;
@@ -1372,16 +1264,19 @@ bool handle_callbacks(void)
 {
 	static Heartbeat_Callback  cb_heartbeat;
 	static Frame_Callback      cb_frame;
-           uint8_t             next_tail;
-
+	static Scheduler_Callback  cb_scheduler;
+	
 	// done if there is no pending message request in the queue
 	if(arinc429.callback.tail == arinc429.callback.head)           return false;
 
 	// done if the last callback is still pending transmission
 	if(!bootloader_spitfp_is_send_possible(&bootloader_status.st)) return false;
 
+	// get the current tail position in the callback queue
+	uint16_t next_tail = arinc429.callback.tail;
+
 	// compute the next tail position
-	next_tail = (arinc429.callback.tail + 1) & (ARINC429_CB_QUEUE_SIZE - 1);
+	if(++next_tail >= ARINC429_CB_QUEUE_SIZE) next_tail = 0;
 
 	// get the message data
 	uint8_t  message   = arinc429.callback.queue[next_tail].message;
@@ -1426,15 +1321,27 @@ bool handle_callbacks(void)
 			tfp_make_default_header(&cb_frame.header, bootloader_get_uid(), sizeof(Frame_Callback), FID_CALLBACK_FRAME_MESSAGE);
 
 			// collect the callback message data
-			cb_frame.channel      = message & 1;
-			cb_frame.seq_number   = arinc429.callback.seq_number;
-			cb_frame.timestamp    = timestamp;
-			cb_frame.frame_status = ARINC429_FRAME_STATUS_UPDATE;
-			cb_frame.frame        = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
-			cb_frame.age          = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame_age;
+			cb_frame.channel    = ARINC429_CHANNEL_RX1 + (message & 1);
+			cb_frame.seq_number = arinc429.callback.seq_number_frame;
+			cb_frame.timestamp  = timestamp;
+			cb_frame.frame      = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
+
+			// new or update?
+			if(arinc429.rx_channel[message & 1].frame_buffer[buffer].frame_age > 60000)
+			{
+				// new
+				cb_frame.frame_status = ARINC429_FRAME_STATUS_NEW;
+				cb_frame.age          = 0;
+			}
+			else
+			{
+				// update
+				cb_frame.frame_status = ARINC429_FRAME_STATUS_UPDATE;
+				cb_frame.age          = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame_age;
+			}
 
 			// increment the sequence number, thereby skipping the value 0
-			if(++arinc429.callback.seq_number == 0)  arinc429.callback.seq_number = 1;
+			if(++arinc429.callback.seq_number_frame == 0)  arinc429.callback.seq_number_frame = 1;
 
 			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_frame, sizeof(Frame_Callback));
@@ -1450,20 +1357,41 @@ bool handle_callbacks(void)
 			tfp_make_default_header(&cb_frame.header, bootloader_get_uid(), sizeof(Frame_Callback), FID_CALLBACK_FRAME_MESSAGE);
 
 			// collect the callback message data
-			cb_frame.channel      = message & 1;
-			cb_frame.seq_number   = arinc429.callback.seq_number;
+			cb_frame.channel      = ARINC429_CHANNEL_RX1 + (message & 1);
+			cb_frame.seq_number   = arinc429.callback.seq_number_frame;
 			cb_frame.timestamp    = timestamp;
 			cb_frame.frame_status = ARINC429_FRAME_STATUS_TIMEOUT;
 			cb_frame.frame        = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
 			cb_frame.age          = arinc429.rx_channel[message & 1].timeout_period;
 
 			// increment the sequence number, thereby skipping the value 0
-			if(++arinc429.callback.seq_number == 0)  arinc429.callback.seq_number = 1;
+			if(++arinc429.callback.seq_number_frame == 0)  arinc429.callback.seq_number_frame = 1;
 
 			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_frame, sizeof(Frame_Callback));
 
 			// ARINC429_CALLBACK_JOB_TIMEOUT_RX* done
+			break;
+
+
+		case ARINC429_CALLBACK_JOB_SCHEDULER_CB :
+
+			// create the callback message
+			tfp_make_default_header(&cb_scheduler.header, bootloader_get_uid(), sizeof(Scheduler_Callback), FID_CALLBACK_SCHEDULER_MESSAGE);
+
+			// collect the callback message data
+			cb_scheduler.channel      = ARINC429_CHANNEL_TX1 + (message & 1);
+			cb_scheduler.seq_number   = arinc429.callback.seq_number_scheduler;
+			cb_scheduler.timestamp    = timestamp;
+			cb_scheduler.token        = buffer;
+
+			// increment the sequence number, thereby skipping the value 0
+			if(++arinc429.callback.seq_number_scheduler == 0)  arinc429.callback.seq_number_scheduler = 1;
+
+			// send the callback message
+			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_scheduler, sizeof(Scheduler_Callback));
+
+			// ARINC429_CALLBACK_JOB_SCHEDULER_CB done
 			break;
 
 

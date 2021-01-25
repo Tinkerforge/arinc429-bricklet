@@ -68,7 +68,7 @@ void communication_init(void);
 #define ARINC429_CHANNEL_TX10             10  // ...
 #define ARINC429_CHANNEL_TX11             11  // ...
 #define ARINC429_CHANNEL_TX12             12  // ...
-#define ARINC429_CHANNEL_RX               32  // all TX channels
+#define ARINC429_CHANNEL_RX               32  // all RX channels
 #define ARINC429_CHANNEL_RX1              33  // RX channel #1
 #define ARINC429_CHANNEL_RX2              34  // RX channel #2
 #define ARINC429_CHANNEL_RX3              35  // not used
@@ -101,25 +101,34 @@ void communication_init(void);
 #define ARINC429_PRIORITY_DISABLED         0  // RX priority buffers disabled
 #define ARINC429_PRIORITY_ENABLED          1  // RX priority buffers enabled
 
-#define ARINC429_FRAME_STATUS_UPDATE       0  // new or updated frame received
-#define ARINC429_FRAME_STATUS_TIMEOUT      1  // frame is overdue (frame data are last data received)
+#define ARINC429_FRAME_STATUS_NEW          0  // new     frame received (or 1st frame after a timeout)
+#define ARINC429_FRAME_STATUS_UPDATE       1  // updated frame received
+#define ARINC429_FRAME_STATUS_TIMEOUT      2  // frame is overdue (frame data are last data received)
 
-#define ARINC429_SCHEDULER_JOB_SKIP        0  // scheduler job code for 'skip'  : no transmit, no   dwell
-#define ARINC429_SCHEDULER_JOB_DWELL       1  // scheduler job code for 'dwell' : no transmit, only dwell
-#define ARINC429_SCHEDULER_JOB_SINGLE      2  // scheduler job code for 'single': send frame once       and dwell
-#define ARINC429_SCHEDULER_JOB_CYCLIC      3  // scheduler job code for 'cyclic': send frame repeatedly and dwell
-#define ARINC429_SCHEDULER_JOB_RETRANS_RX1 4 // scheduler job code for retransmission of a a frame received on RX1
-#define ARINC429_SCHEDULER_JOB_RETRANS_RX2 5 // scheduler job code for retransmission of a a frame received on RX2
+#define ARINC429_SCHEDULER_JOB_SKIP        0  // scheduler job code for for an unused task table entry
+#define ARINC429_SCHEDULER_JOB_CALLBACK    1  // scheduler job code for sending a callback
+#define ARINC429_SCHEDULER_JOB_STOP        2  // scheduler job code for stopping the scheduler
+#define ARINC429_SCHEDULER_JOB_JUMP        3  // scheduler job code for jumping to a given job index position
+#define ARINC429_SCHEDULER_JOB_RETURN      4  // scheduler job code for returning to the job index position following the last jump command
+#define ARINC429_SCHEDULER_JOB_DWELL       5  // scheduler job code for 'dwell' : no transmit, only dwell
+#define ARINC429_SCHEDULER_JOB_SINGLE      6  // scheduler job code for 'single': send frame once       and dwell
+#define ARINC429_SCHEDULER_JOB_CYCLIC      7  // scheduler job code for 'cyclic': send frame repeatedly and dwell
+#define ARINC429_SCHEDULER_JOB_RETRANS_RX1 8  // scheduler job code for retransmission of a a frame received on RX1
+#define ARINC429_SCHEDULER_JOB_RETRANS_RX2 9  // scheduler job code for retransmission of a a frame received on RX2
+
+
+// internal parameters encoding
 
 #define ARINC429_A429_MODE_NORMAL          0  // high-level A429 operations are executed
 #define ARINC429_A429_MODE_DEBUG           1  // high-level A429 operations are stopped for low-level debug access
 
 #define ARINC429_CALLBACK_JOB_NONE         0  // callback job code for 'nothing to do'
-#define ARINC429_CALLBACK_JOB_HEARTBEAT    1  // callback job code for 'heartbeat'
-#define ARINC429_CALLBACK_JOB_FRAME_RX1    2  // callback job code for 'new frame', bit 0 = 0 -> channel 1
-#define ARINC429_CALLBACK_JOB_FRAME_RX2    3  // callback job code for 'new frame', bit 0 = 1 -> channel 2
-#define ARINC429_CALLBACK_JOB_TIMEOUT_RX1  4  // callback job code for 'timeout',   bit 0 = 0 -> channel 1
-#define ARINC429_CALLBACK_JOB_TIMEOUT_RX2  5  // callback job code for 'timeout',   bit 0 = 0 -> channel 2
+#define ARINC429_CALLBACK_JOB_HEARTBEAT    1  // callback job code for a heartbeat    event
+#define ARINC429_CALLBACK_JOB_FRAME_RX1    2  // callback job code for a RX new frame event, bit 0 = 0 -> RX channel 1
+#define ARINC429_CALLBACK_JOB_FRAME_RX2    3  // callback job code for a RX new frame event, bit 0 = 1 -> RX channel 2
+#define ARINC429_CALLBACK_JOB_TIMEOUT_RX1  4  // callback job code for a RX timeout   event, bit 0 = 0 -> RX channel 1
+#define ARINC429_CALLBACK_JOB_TIMEOUT_RX2  5  // callback job code for a RX timeout   event, bit 0 = 1 -> RX channel 2
+#define ARINC429_CALLBACK_JOB_SCHEDULER_CB 6  // callback job code for a TX scheduler event, bit 0 = 0 -> TX channel 1
 
 #define ARINC429_CALLBACK_OFF              0  // callback disabled
 #define ARINC429_CALLBACK_ON               1  // callback enabled
@@ -149,92 +158,47 @@ void communication_init(void);
 
 // function and callback IDs
 
-#define FID_DEBUG_GET_DISCRETES                       1
-#define FID_DEBUG_READ_REGISTER_LOW_LEVEL             2
-#define FID_DEBUG_WRITE_REGISTER_LOW_LEVEL            3
-
-#define FID_GET_CAPABILITIES                          4
-#define FID_SET_HEARTBEAT_CALLBACK_CONFIGURATION      5
-#define FID_GET_HEARTBEAT_CALLBACK_CONFIGURATION      6
-#define FID_CALLBACK_HEARTBEAT                        7
-#define FID_SET_CHANNEL_CONFIGURATION                 8
-#define FID_GET_CHANNEL_CONFIGURATION                 9
-#define FID_SET_CHANNEL_MODE                         10
-#define FID_GET_CHANNEL_MODE                         11
-#define FID_CLEAR_ALL_RX_FILTERS                     12
-#define FID_CLEAR_RX_FILTER                          13
-#define FID_SET_RX_STANDARD_FILTERS                  14
-#define FID_SET_RX_FILTER                            15
-#define FID_GET_RX_FILTER                            16
-#define FID_READ_FRAME                               17
-#define FID_SET_RECEIVE_CALLBACK_CONFIGURATION       18
-#define FID_GET_RECEIVE_CALLBACK_CONFIGURATION       19
-#define FID_CALLBACK_FRAME_MESSAGE                   20
-#define FID_WRITE_FRAME_DIRECT                       21
-#define FID_WRITE_FRAME_SCHEDULED                    22
-#define FID_CLEAR_SCHEDULE_ENTRIES                   23
-#define FID_SET_SCHEDULE_ENTRY                       24
-#define FID_GET_SCHEDULE_ENTRY                       25
-#define FID_RESET_A429                               26
+#define FID_GET_CAPABILITIES                          1
+#define FID_SET_HEARTBEAT_CALLBACK_CONFIGURATION      2
+#define FID_GET_HEARTBEAT_CALLBACK_CONFIGURATION      3
+#define FID_CALLBACK_HEARTBEAT                        4
+#define FID_SET_CHANNEL_CONFIGURATION                 5
+#define FID_GET_CHANNEL_CONFIGURATION                 6
+#define FID_SET_CHANNEL_MODE                          7
+#define FID_GET_CHANNEL_MODE                          8
+#define FID_CLEAR_ALL_RX_FILTERS                      9
+#define FID_CLEAR_RX_FILTER                          10
+#define FID_SET_RX_STANDARD_FILTERS                  11
+#define FID_SET_RX_FILTER                            12
+#define FID_GET_RX_FILTER                            13
+#define FID_READ_FRAME                               14
+#define FID_SET_RECEIVE_CALLBACK_CONFIGURATION       15
+#define FID_GET_RECEIVE_CALLBACK_CONFIGURATION       16
+#define FID_CALLBACK_FRAME_MESSAGE                   17
+#define FID_WRITE_FRAME_DIRECT                       18
+#define FID_WRITE_FRAME_SCHEDULED                    19
+#define FID_CLEAR_SCHEDULE_ENTRIES                   20
+#define FID_SET_SCHEDULE_ENTRY                       21
+#define FID_GET_SCHEDULE_ENTRY                       22
+#define FID_RESTART                                  23
+#define FID_CALLBACK_SCHEDULER_MESSAGE               24
 
 
 /****************************************************************************/
 /* DATA STRUCTURES                                                          */
 /****************************************************************************/
 
-/*** input & output data structures - debug level functions ***/
-
-// debug_get_discretes()
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-} __attribute__((__packed__)) DebugGetDiscretes;
-
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint16_t          rx_discretes;           // RX related discretes
-	uint16_t          tx_discretes;           // TX related discretes
-} __attribute__((__packed__)) DebugGetDiscretes_Response;
-
-
-// debug_read_register_low_level()
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           op_code;                // SPI command opcode
-} __attribute__((__packed__)) DebugReadRegisterLowLevel;
-
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           value_length;           // number of bytes in value_data[]
-	uint8_t           value_data[32];         // bytes read from A429 chip
-	uint8_t           rw_error;               // SPI return / error code
-} __attribute__((__packed__)) DebugReadRegisterLowLevel_Response;
-
-
-// debug_write_register_low_level()
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           op_code;                // SPI command code
-	uint8_t           value_length;           // number of bytes to write
-	uint8_t           value_data[32];         // bytes to write
-} __attribute__((__packed__)) DebugWriteRegisterLowLevel;
-
-typedef struct {
-	TFPMessageHeader  header;                 // message header
-	uint8_t           rw_error;               // SPI return / error code
-} __attribute__((__packed__)) DebugWriteRegisterLowLevel_Response;
-
-
-/*** input & output data structures - user level functions ***/
+/*** input & output data structures ***/
 
 // get_capabilities()
 typedef struct {
-	TFPMessageHeader  header;                 // message header
+	TFPMessageHeader  header;                   // message header
 } __attribute__((__packed__)) GetCapabilities;
 
 typedef struct {
 	TFPMessageHeader  header;                   // message header
-	uint16_t          tx_total_scheduler_tasks; // total number of  TX scheduler task entries
-	uint16_t          tx_used_scheduler_tasks;  // number of unused TX scheduler task entries
+	uint16_t          tx_total_scheduler_jobs;  // total number of  TX scheduler job entries
+	uint16_t          tx_used_scheduler_jobs;   // number of unused TX scheduler job entries
 	uint16_t          rx_total_frame_filters;   // total number of  RX frame buffers
 	uint16_t          rx_used_frame_filters[2]; // number of unused RX frame buffers
 } __attribute__((__packed__)) GetCapabilities_Response;
@@ -419,7 +383,7 @@ typedef struct {
 typedef struct {
 	TFPMessageHeader  header;                 // message header
 	uint8_t           channel;                // selected channel
-	uint16_t          task_index;             // index number in job table
+	uint16_t          job_index;              // index number in job table
 	uint8_t           job;                    // assigned job
 	uint16_t          frame_index;            // index number in frame table selecting frame to send
 	uint8_t           dwell_time;             // time in ms to wait before executing the next job
@@ -430,8 +394,8 @@ typedef struct {
 typedef struct {
 	TFPMessageHeader  header;                 // message header
 	uint8_t           channel;                // selected channel
-	uint16_t          task_index_first;       // first schedule entry by index number to be cleared
-	uint16_t          task_index_last;        // last  schedule entry by index number to be cleared
+	uint16_t          job_index_first;        // first schedule entry by index number to be cleared
+	uint16_t          job_index_last;         // last  schedule entry by index number to be cleared
 } __attribute__((__packed__)) ClearScheduleEntries;
 
 
@@ -439,7 +403,7 @@ typedef struct {
 typedef struct {
 	TFPMessageHeader  header;                 // message header
 	uint8_t           channel;                // selected channel: ARINC429_CHANNEL_TX1
-	uint16_t          task_index;             // index number in job table
+	uint16_t          job_index;              // index number in job table
 } __attribute__((__packed__)) GetScheduleEntry;
 
 typedef struct {
@@ -451,11 +415,10 @@ typedef struct {
 } __attribute__((__packed__)) GetScheduleEntry_Response;
 
 
-// reset()
+// restart()
 typedef struct {
 	TFPMessageHeader  header;                 // message header
-	uint8_t           mode;                   // A429 operations mode
-} __attribute__((__packed__)) Reset_A429;
+} __attribute__((__packed__)) Restart;
 
 
 /*** output data structures - callbacks ***/
@@ -477,10 +440,20 @@ typedef struct {
 	uint8_t           channel;                // channel on which the frame was received
 	uint8_t           seq_number;             // sequence number of the rx callback message
 	uint16_t          timestamp;              // time of message creation
-	uint8_t           frame_status;           // reason for callback: ARINC429_FRAME_STATUS_TIMEOUT or ARINC429_FRAME_STATUS_UPDATE
+	uint8_t           frame_status;           // reason for callback: ARINC429_FRAME_STATUS_*
 	uint32_t          frame;                  // complete A429 frame received (data and label) 
 	uint16_t          age;                    // time elapsed since last reception of a frame with this label and SDI, in [ms]
 } __attribute__((__packed__)) Frame_Callback;
+
+
+// scheduler message callback
+typedef struct {
+	TFPMessageHeader  header;                 // message header
+	uint8_t           channel;                // channel on which the message was generated
+	uint8_t           seq_number;             // sequence number of the rx callback message
+	uint16_t          timestamp;              // time of message creation
+	uint8_t           token;                  // arbitrary number selected by the user when setting up the callback job
+} __attribute__((__packed__)) Scheduler_Callback;
 
 
 /****************************************************************************/
@@ -493,14 +466,7 @@ bool check_sw_filter_map(uint8_t channel_index, uint16_t ext_label);
 bool enqueue_message    (uint8_t message_type,  uint16_t timestamp, uint8_t buffer);
 
 
-/*** function prototypes - debug level ***/
-
-BootloaderHandleMessageResponse debug_get_discretes                 (const DebugGetDiscretes                 *data, DebugGetDiscretes_Response                 *response);
-BootloaderHandleMessageResponse debug_read_register_low_level       (const DebugReadRegisterLowLevel         *data, DebugReadRegisterLowLevel_Response         *response);
-BootloaderHandleMessageResponse debug_write_register_low_level      (const DebugWriteRegisterLowLevel        *data, DebugWriteRegisterLowLevel_Response        *response);
-
-
-/*** function prototypes - user level ***/
+/*** function prototypes - API ***/
 
 BootloaderHandleMessageResponse get_capabilities                    (const GetCapabilities                   *data, GetCapabilities_Response                   *response);
 
@@ -531,7 +497,7 @@ BootloaderHandleMessageResponse clear_schedule_entries              (const Clear
 BootloaderHandleMessageResponse set_schedule_entry                  (const SetScheduleEntry                  *data                                                      );
 BootloaderHandleMessageResponse get_schedule_entry                  (const GetScheduleEntry                  *data, GetScheduleEntry_Response                  *response);
 
-BootloaderHandleMessageResponse reset_a429                          (const Reset_A429                        *data                                                      );
+BootloaderHandleMessageResponse restart                             (const Restart                           *data                                                      );
 
 
 /*** function prototypes - callbacks ***/

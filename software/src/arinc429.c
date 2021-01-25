@@ -47,6 +47,54 @@ void arinc429_init_data(void);
 void arinc429_init_chip(void);
 
 
+
+/****************************************************************************/
+/* local helper functions                                                   */
+/****************************************************************************/
+
+/* check the TX frame buffer map for a transmit allowance */
+bool check_tx_buffer_map(uint8_t channel_index, uint16_t buffer_index)
+{
+	// get the lower 5 bits from the buffer index
+	uint16_t buffer_index_lo = (buffer_index & 0x001F) >> 0;
+
+	// get the upper 3 bits from the buffer index
+	uint16_t buffer_index_hi = (buffer_index & 0x00E0) >> 5;
+
+	// get the map word
+	uint32_t map = arinc429.tx_channel[channel_index].frame_buffer_map[buffer_index_hi];
+
+	// check if there is a filter assigned
+	if(map & (1 << buffer_index_lo)) return true;
+	else                             return false;
+}
+
+
+/* update the TX frame buffer map */
+void update_tx_buffer_map(uint8_t channel_index, uint16_t buffer_index, uint8_t task)
+{
+	// get the lower 5 bits from the buffer index
+	uint16_t buffer_index_lo = (buffer_index & 0x1F) >> 0;
+
+	// get the upper 3 bits from the buffer index
+	uint16_t buffer_index_hi = (buffer_index & 0xE0) >> 5;
+
+	// get a pointer to the map word
+	uint32_t *map = &(arinc429.tx_channel[channel_index].frame_buffer_map[buffer_index_hi]);
+
+	// modify the map
+	switch(task)
+	{
+		case ARINC429_SET   : *map |=  (1 << buffer_index_lo); break; // set   bit
+		case ARINC429_CLEAR : *map &= ~(1 << buffer_index_lo); break; // clear bit
+		default             :                                  break; // unknown task, do nothing
+	}
+
+	// done
+	return;
+}
+
+
 /****************************************************************************/
 /* local functions                                                          */
 /****************************************************************************/
@@ -123,7 +171,10 @@ void arinc429_task_update_channel_config(void)
 				// yes, reset scheduler
 				channel->last_job_exec_time  = system_timer_get_ms();
 				channel->last_job_dwell_time = 0;
-				channel->task_index          = ARINC429_TX_TASKS_NUM - 1;   // the scheduler starts with incrementing the index
+				channel->job_index           = ARINC429_TX_JOBS_NUM - 1;   // the job execution starts with incrementing the index
+
+				// restart sequence number from 0 (the counter is common to all TX channels)
+				arinc429.callback.seq_number_scheduler = 0;
 			}
 		}
 
@@ -182,12 +233,12 @@ void arinc429_task_update_channel_config(void)
 			channel->common.frames_lost_curr      = channel->common.frames_lost_last      = 0;
 		}
 
-		// reset the frame callback sequence numbers if the callback is set to 'off'
+		// reset the frame callback sequence number if the callback is set to 'off'
 		if(    (channel->common.change_request  & ARINC429_UPDATE_CALLBACK_MODE)
 		    && (channel->common.callback_mode  == ARINC429_CALLBACK_OFF        ) )
 		{
-			// yes, restart sequence numbers for 0 (the counter is common to all RX channels)
-			arinc429.callback.seq_number = 0;
+			// yes, restart sequence number from 0 (the counter is common to all RX channels)
+			arinc429.callback.seq_number_frame = 0;
 		}
 
 		// reset the frame buffers if operating mode is changed (or repeated set) to 'active'
@@ -286,8 +337,8 @@ void arinc429_task_tx_immediate(void)
 				uint8_t data[4];    // transfer buffer for hi3593_write_register()
 				uint8_t next_tail;  // next tail position in TX queue
 
-				// compute the next tail position (modulo ARINC429_TX_QUEUE_SIZE)
-				next_tail = (channel->tail + 1) & (ARINC429_TX_QUEUE_SIZE - 1);
+				// compute the next tail position
+				if(++next_tail >= ARINC429_TX_QUEUE_SIZE) next_tail = 0;
 
 				// get the frame and convert it from uint32_t to an array of uint8_t
 				memcpy(frame, &channel->queue[next_tail], 4);
@@ -333,8 +384,8 @@ void arinc429_task_tx_scheduled(void)
 		uint16_t jobcode;
 		uint16_t index;
 
-		uint16_t skip_empty_budget = ARINC429_TX_TASKS_NUM;         // number of total empty                jobs that are executed per tick
-		uint8_t  zero_dwell_budget = ARINC429_TX_ZERO_DWELL_BUDGET; // number of successive zero dwell time jobs that are executed per tick
+		uint16_t no_tx_tasks_budget = ARINC429_TX_JOBS_NUM;          // number of none transmitting          jobs that are executed per tick
+		uint8_t  zero_dwell_budget  = ARINC429_TX_ZERO_DWELL_BUDGET; // number of successive zero dwell time jobs that are executed per tick
 
 		// get a pointer to the channel
 		ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
@@ -352,28 +403,78 @@ void arinc429_task_tx_scheduled(void)
 
 next_task:
 
-		// advance to the next job (increment task_index modulo ARINC429_TX_TASKS_NUM)
-		channel->task_index = (channel->task_index + 1) & (ARINC429_TX_TASKS_NUM - 1);
+		// advance to the next job
+		if(++channel->job_index >= ARINC429_TX_JOBS_NUM) channel->job_index = 0;
 
 		// get the job data
-		job_frame  =           channel->job_frame [channel->task_index];
-		dwell_time = (uint32_t)channel->dwell_time[channel->task_index];  // casted from unit8_t to uint32_t
+		job_frame  =           channel->job_frame [channel->job_index];
+		dwell_time = (uint32_t)channel->dwell_time[channel->job_index];  // casted from unit8_t to uint32_t
 
-		// extract the job code and the index to the frame table
+		// extract the job code and the frame index (or special meaning) to the frame table
 		jobcode = (job_frame & ARINC429_TX_JOB_JOBCODE_MASK) >> ARINC429_TX_JOB_JOBCODE_POS;
 		index   = (job_frame & ARINC429_TX_JOB_INDEX_MASK  ) >> ARINC429_TX_JOB_INDEX_POS;
 
-		// is it an empty task or a completed single transmit?
-		if(    ((jobcode == ARINC429_SCHEDULER_JOB_SKIP  )                                                               )
-		    || ((jobcode == ARINC429_SCHEDULER_JOB_SINGLE) && (channel->frame_buffer[index] == ARINC429_INELIGIBLE_FRAME)) )
+		// is it a stop command?
+		if(jobcode == ARINC429_SCHEDULER_JOB_STOP)
 		{
-			// yes, reduce the budget for empty task skips
-			skip_empty_budget--;
+			// yes, update the channel operating mode
+			channel->common.operating_mode = ARINC429_CHANNEL_MODE_ACTIVE;
 
-			// is there budget left over for skipping empty tasks?
-			if(skip_empty_budget > 0)
+			// request execution of the update
+			channel->common.change_request |= ARINC429_UPDATE_OPERATING_MODE;
+
+			// done with this channel
+			continue;
+		}
+
+		// is it a jump command?
+		if(jobcode == ARINC429_SCHEDULER_JOB_JUMP)
+		{
+			// yes, store the current job index
+			channel->job_index_jump = channel->job_index;
+
+			// store the assigned dwell time, it will be executed with the next RETURN job
+			channel->dwell_time_jump = channel->dwell_time[channel->job_index];
+
+			// relocate the job index (the job execution starts with incrementing the index)
+			channel->job_index = (index > 0) ? index - 1 : ARINC429_TX_JOBS_NUM - 1;
+		}
+
+		// is it a return command?
+		if(jobcode == ARINC429_SCHEDULER_JOB_RETURN)
+		{
+			// yes, recall the execution position from where the last JUMP was executed
+			channel->job_index = channel->job_index_jump;
+
+			// recall the dwell time that was given with the JUMP command
+			dwell_time = (uint32_t)channel->dwell_time_jump;
+		}
+
+		// is it a callback command?
+		if(jobcode == ARINC429_SCHEDULER_JOB_CALLBACK)
+		{
+			// yes, prepare scheduler message
+			uint16_t curr_time = (uint16_t)(system_timer_get_ms() & 0x0000FFFF);
+			uint8_t  token     = (uint8_t )(index                 &     0x00FF);
+
+			// enqueue scheduler message, success?
+			if(!enqueue_message(ARINC429_CALLBACK_JOB_SCHEDULER_CB, curr_time, token))
 			{
-				// yes, directly do the next task
+				// no, increment counter on lost frames
+				channel->common.frames_lost_curr++;
+			}
+		}
+
+		// is it job that does not use the dwell time?
+		if(jobcode < ARINC429_SCHEDULER_JOB_RETURN)
+		{
+			// yes, reduce the budget for non-transmitting tasks
+			no_tx_tasks_budget--;
+
+			// is there budget left over for executing another job right now?
+			if(no_tx_tasks_budget > 0)
+			{
+				// yes, execute the next job right now
 				goto next_task;
 			}
 			else
@@ -395,6 +496,13 @@ next_task:
 				// select frame source
 				if(jobcode < ARINC429_SCHEDULER_JOB_RETRANS_RX1)
 				{
+					// transmit from TX frame buffer - check buffer map if frame is eligible for transmit
+					if(!check_tx_buffer_map(i, index))
+					{
+						// no, skip transmission and proceed to dwelling
+						goto next_dwell;
+					}
+
 					// transmit from TX frame buffer, convert the frame from uint32_t to an array of uint8_t
 					memcpy(frame, &(channel->frame_buffer[index]), 4);
 				}
@@ -442,10 +550,10 @@ next_task:
 				// shall do a single transmit only?
 				if(jobcode == ARINC429_SCHEDULER_JOB_SINGLE)
 				{
-					// yes, update the frame table - ineligible frame
-					channel->frame_buffer[index] = ARINC429_INELIGIBLE_FRAME;
+					// yes, update the frame buffer map - ineligible the frame
+					update_tx_buffer_map(i, index, ARINC429_CLEAR);
 				}
-			}
+							}
 			else
 			{
 				// no, the frame is not transmitted on this round - increment statistics counter on lost frames 
@@ -458,13 +566,13 @@ next_dwell:
 		// does the current task have a zero dwell time?
 		if(dwell_time == 0)
 		{
-			// yes, reduce budget for repeated zero dwell time tasks
+			// yes, reduce budget for successive zero dwell time tasks
 			zero_dwell_budget--;
 
 			// is there budget left over for executing another task?
 			if(zero_dwell_budget > 0)
 			{
-				// yes, directly do the next task
+				// yes, execute the next task right away
 				goto next_task;
 			}
 		}
@@ -562,16 +670,24 @@ void arinc429_task_receive_frames(void)
 				// get a pointer to the frame buffer
 				ARINC429RXBuffer *buffer = &(channel->frame_buffer[buffer_index]);
 
-				// compute the age of the frame
-				age = curr_time - buffer->last_rx_time;
+				// 1st frame ever or after a timeout?
+				if(buffer->frame_age <= ARINC429_RX_BUFFER_NEW)
+				{
+					// no, compute the age of the frame
+					age = curr_time - buffer->last_rx_time;
 
-				// limit the    age to 60 sec = 60000 ms,
-				// also set the age to 60 sec if the buffer was not in use or had a timeout before
-				if((age > 60000) || (buffer->frame_age > 60000))  age = 60000;
+					// limit the age to 60 sec = 60000 ms
+					if(age > 60000)  age = 60000;
+				}
+				else
+				{
+					// yes, memorize its the 1st frame ever or after timeout
+					age = ARINC429_RX_BUFFER_NEW;
+				}
 
 				// shall send a callback?
 				if(    ((channel->common.callback_mode == ARINC429_CALLBACK_ON       )                                                                 )
-				    || ((channel->common.callback_mode == ARINC429_CALLBACK_ON_CHANGE) && ((buffer->frame != new_frame) || (buffer->frame_age > 60000))) )
+				    || ((channel->common.callback_mode == ARINC429_CALLBACK_ON_CHANGE) && ((buffer->frame != new_frame) || (buffer->frame_age > ARINC429_RX_BUFFER_NEW))) )
 				{
 					// yes, enqueue a new frame message, success?
 					if(!enqueue_message(ARINC429_CALLBACK_JOB_FRAME_RX1 + i, curr_time, buffer_index))
@@ -788,11 +904,12 @@ void arinc429_init_data(void)
 		// scheduled transmit
 		channel->last_job_exec_time           = 0;
 		channel->last_job_dwell_time          = 0;
-		channel->scheduler_tasks_used         = 0;
-		channel->task_index                   = ARINC429_TX_TASKS_NUM - 1;   // the scheduler starts with incrementing the index
+		channel->scheduler_jobs_used          = 0;
+		channel->job_index                    = ARINC429_TX_JOBS_NUM - 1;   // the job execution starts with incrementing the index
+		channel->job_index_jump               = 0;
 
 		// scheduler task table
-		for(uint16_t j = 0; j < ARINC429_TX_TASKS_NUM; j++)
+		for(uint16_t j = 0; j < ARINC429_TX_JOBS_NUM; j++)
 		{
 			channel->job_frame[j]             = ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS;
 			channel->dwell_time[j]            = 0;
@@ -802,6 +919,12 @@ void arinc429_init_data(void)
 		for(uint16_t j = 0; j < ARINC429_TX_BUFFER_NUM; j++)
 		{
 			channel->frame_buffer[j]          = 0;
+		}
+		
+		// scheduler frame transmit eligible map
+		for(uint16_t j = 0; j < 8; j++)
+		{
+			channel->frame_buffer_map[j]      = 0;
 		}
 	}
 
@@ -865,7 +988,8 @@ void arinc429_init_data(void)
 	// callback queue
 	arinc429.callback.head                    = 0;
 	arinc429.callback.tail                    = 0;
-	arinc429.callback.seq_number              = 0;
+	arinc429.callback.seq_number_frame        = 0;
+	arinc429.callback.seq_number_scheduler    = 0;
 
 	// callback queue buffers
 	for(uint16_t i = 0; i < ARINC429_CB_QUEUE_SIZE; i++)

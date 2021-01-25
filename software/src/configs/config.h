@@ -25,18 +25,19 @@
 #include "xmc_device.h"
 
 #define STARTUP_SYSTEM_INIT_ALREADY_DONE
-#define SYSTEM_TIMER_FREQUENCY 1000 // Use 1 kHz system timer
 
-#define UARTBB_TX_PIN P4_4
+#define SYSTEM_TIMER_FREQUENCY    1000			// use 1 kHz system timer
+#define UARTBB_TX_PIN             P4_4
 
-#define FIRMWARE_VERSION_MAJOR 2
-#define FIRMWARE_VERSION_MINOR 0
+#define FIRMWARE_VERSION_MAJOR    2
+#define FIRMWARE_VERSION_MINOR    1
 #define FIRMWARE_VERSION_REVISION 0
 
 #define SPI_FIFO_COOP_ENABLE
 #define SPI_FIFO_COOP_USE_MUTEX
-#define CCU4_PWM_PUSH_PULL_ALT XMC_GPIO_MODE_OUTPUT_PUSH_PULL_ALT4
-#define COOP_TASK_STACK_SIZE 2048
+
+#define CCU4_PWM_PUSH_PULL_ALT    XMC_GPIO_MODE_OUTPUT_PUSH_PULL_ALT4
+#define COOP_TASK_STACK_SIZE      2048
 
 #include "config_custom_bootloader.h"
 

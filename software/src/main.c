@@ -37,39 +37,6 @@ extern CoopTask arinc429_task;
 
 
 /****************************************************************************/
-/* data structures                                                          */
-/****************************************************************************/
-
-CoopTask main_task;
-
-
-/****************************************************************************/
-/* task & tick functions                                                    */
-/****************************************************************************/
-
-void main_tick(void)
-{
-	// restart main_tick_task()
-	coop_task_tick(&main_task);
-}
-
-void main_tick_task(void)
-{
-	while(true)
-	{
-		// housekeeping
-		bootloader_tick();
-
-		// communication
-		communication_tick();
-
-		// done for now
-		coop_task_yield();
-	}
-}
-
-
-/****************************************************************************/
 /* MAIN()                                                                   */
 /****************************************************************************/
 
@@ -82,21 +49,20 @@ int main(void)
 	// initialize communication
 	communication_init();
 
-	// initialize tasks
-	coop_task_init(&main_task,     main_tick_task    );
+	// initialize A429 task
 	coop_task_init(&arinc429_task, arinc429_tick_task);
 
-	// set initial operating mode
-	arinc429.system.operating_mode = ARINC429_A429_MODE_NORMAL;
-
 	// set initial system requests
-	arinc429.system.change_request = 0xFF;  // do all
+	arinc429.system.change_request = 0xFF;  // request all updates
 
 	// main-loop
 	while(true)
 	{
-		// do housekeeping & communication
-		main_tick();
+		// do housekeeping
+		bootloader_tick();
+
+		// do communication
+		communication_tick();
 
 		// do A429 specific operations
 		arinc429_tick();

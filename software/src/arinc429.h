@@ -47,6 +47,7 @@
 // RX filter
 #define ARINC429_RX_FILTERS_NUM          1024               // number of extended labels (label + SDI)                    ** given by application design  **
 #define ARINC429_RX_BUFFER_NUM           256                // number of frame buffers                                    ## customizable, max 256        ##
+#define ARINC429_RX_BUFFER_NEW           0xFFFC             // value in frame_buffer[].frame_age for a frame after timeout** given by application design  **
 #define ARINC429_RX_BUFFER_TIMEOUT       0xFFFD             // value in frame_buffer[].frame_age for a timeout            ** given by application design  **
 #define ARINC429_RX_BUFFER_EMPTY         0xFFFE             // value in frame_buffer[].frame_age for empty  buffers       ** given by application design  **
 #define ARINC429_RX_BUFFER_UNUSED        0xFFFF             // value in frame_buffer[].frame_age for unused buffers       ** given by application design  **
@@ -57,20 +58,19 @@
 #define ARINC429_TIMEOUT_CHECK_BUDGET    10                 // number of frame buffers checked for timeout in one tick    ## fudge factor for performance tuning (goof value:  ?)
 
 // TX scheduler
-#define ARINC429_TX_TASKS_NUM            512                // number of TX tasks                                         ## customizable, = 2^x          ##
+#define ARINC429_TX_JOBS_NUM             1000               // number of TX jobs                                          ## customizable, max 4096       ##
 #define ARINC429_TX_BUFFER_NUM           256                // number of TX frame buffers                                 ## customizable, max 4096       ##
 #define ARINC429_TX_JOB_JOBCODE_MASK     0xF000             // mask for job   code                                        ** given by application design  **
 #define ARINC429_TX_JOB_INDEX_MASK       0x0FFF             // mask for frame index                                       ** given by application design  **
 #define ARINC429_TX_JOB_JOBCODE_POS      12                 // LSB position of job   code                                 ** given by application design  **
-#define ARINC429_TX_JOB_JOBCODE_MASK     0xF000             // needs to be set according to ARINC429_TX_JOB_JOBCODE_POS   ** given by application design  **
 #define ARINC429_TX_JOB_INDEX_POS        0                  // LSB position of frame index                                ** given by application design  **
 #define ARINC429_TX_ZERO_DWELL_BUDGET    4                  // number of successive zero dwell time jobs done in one tick ## fudge factor for performance tuning (good value:  4)
 
 // callback queue
-#define ARINC429_CB_QUEUE_SIZE           256                // number of entries in the callback queue                    ## customizable, = 2^x, max 256 ##
+#define ARINC429_CB_QUEUE_SIZE           300                // number of entries in the callback queue                    ## customizable, max 2^16 ##
 
 // immediate transmit queue
-#define ARINC429_TX_QUEUE_SIZE           16                 // number of entries in the immediate transmit queue          ## customizable, = 2^x, max 256 ##
+#define ARINC429_TX_QUEUE_SIZE           16                 // number of entries in the immediate transmit queue          ## customizable, max 2^8  ##
 
 // requests - system level
 #define ARINC429_SYSTEM_RESET_XMC_DATA   (1 << 0)           // request reset  of the XMC  data structure
@@ -87,7 +87,6 @@
 // internal encodings
 #define ARINC429_SET                     0                  // set   a filter in a filter map
 #define ARINC429_CLEAR                   1                  // clear a filter in a filter map
-#define ARINC429_INELIGIBLE_FRAME        0                  // value of a TX frame that will not be transmitted by the scheduler
 
 
 /****************************************************************************/
@@ -109,7 +108,7 @@ PACKED ARINC429Heartbeat;                                   //     8 byte
 typedef struct
 {
 	uint8_t          message;                               //     1 message type and channel id
-	uint8_t          buffer;                                //     1 pointer to frame buffer
+	uint8_t          buffer;                                //     1 pointer to frame buffer or task index
 	uint16_t         timestamp;                             //     2 message creation time
 }                                                           //  ====
 PACKED ARINC429CBQueue;                                     //     4 byte
@@ -118,13 +117,14 @@ PACKED ARINC429CBQueue;                                     //     4 byte
 // callback
 typedef struct
 {
-	uint8_t          head;                                  //     1 message queue head index
-	uint8_t          tail;                                  //     1 message queue tail index
-	uint8_t          seq_number;                            //     1 sequence number of the frame message callback
-	uint8_t          spare;                                 //     1 unused / for alignment purpose
-	ARINC429CBQueue  queue[ARINC429_CB_QUEUE_SIZE];         // 1.024 message queue (ring buffer)
+	uint16_t         head;                                  //     2 message queue head index
+	uint16_t         tail;                                  //     2 message queue tail index
+	uint16_t         spare;                                 //     2 unused / for alignment purpose
+	uint8_t          seq_number_frame;                      //     1 sequence number of the frame     message callback
+	uint8_t          seq_number_scheduler;                  //     1 sequence number of the scheduler message callback
+	ARINC429CBQueue  queue[ARINC429_CB_QUEUE_SIZE];         // 1.200 message queue (ring buffer)
 }                                                           // =====
-PACKED ARINC429Callback;                                    // 1.028 byte
+PACKED ARINC429Callback;                                    // 1.208 byte
 
 
 // common config and status data for all channel types
@@ -158,15 +158,19 @@ typedef struct
 	uint16_t         spare;                                 //      2 unused / for alignment purpose
 
 	// scheduled transmit
-	uint16_t         task_index;                            //      2 index of the current task
-	uint16_t         scheduler_tasks_used;                  //      2 number of used task table entries
-	uint32_t         last_job_exec_time;                    //      4 execution time of the last task
-	uint32_t         last_job_dwell_time;                   //      4 dwell     time of the last task
-	uint16_t         job_frame[ARINC429_TX_TASKS_NUM];      //  1.024 bits 15-12: action (mute, single, cyclic), bits 11-0: index frame[] table
-	uint8_t          dwell_time[ARINC429_TX_TASKS_NUM];     //    512 waiting time in ms before advancing to the next job
+	uint16_t         scheduler_jobs_used;                   //      2 number of used job entries
+	uint16_t         job_index;                             //      2 index of the current job
+	uint16_t         job_index_jump;                        //      2 index of the last jump job
+	uint8_t          spare1;                                //      1 unused / for alignment purpose
+	uint8_t          dwell_time_jump;                       //      1 dwell time of the last jump command
+	uint32_t         last_job_exec_time;                    //      4 execution time of the last job
+	uint32_t         last_job_dwell_time;                   //      4 dwell     time of the last job
+	uint16_t         job_frame[ARINC429_TX_JOBS_NUM];       //  2.000 bits 15-12: action (mute, single, cyclic), bits 11-0: index frame[] table
+	uint8_t          dwell_time[ARINC429_TX_JOBS_NUM];      //  1.000 waiting time in ms before advancing to the next job
 	uint32_t         frame_buffer[ARINC429_TX_BUFFER_NUM];  //  1.024 scheduled TX frames
+	uint32_t         frame_buffer_map[8];                   //     32 single transmit status tracking
 }                                                           //  =====
-PACKED ARINC429TXChannel;                                   //  2.640 byte
+PACKED ARINC429TXChannel;                                   //  4.072 byte
 
 
 // received frame buffer
@@ -217,18 +221,18 @@ PACKED ARINC429System;                                      //      4 byte
 typedef struct
 {
 	// channels
-	ARINC429TXChannel tx_channel[ARINC429_TX_CHANNELS_NUM]; //  2.640 TX channels
+	ARINC429TXChannel tx_channel[ARINC429_TX_CHANNELS_NUM]; //  4.072 TX channels
 	ARINC429RXChannel rx_channel[ARINC429_RX_CHANNELS_NUM]; //  6.496 RX channels
 
 	// callbacks
 	ARINC429Heartbeat heartbeat;                            //      8 bricklet heartbeat
-	ARINC429Callback  callback;                             //  1.028 callback queue
+	ARINC429Callback  callback;                             //  1.208 callback queue
 
 	// system - Attention: needs to be placed at the end
 	//                     of the ARINC429 data structure!
 	ARINC429System    system;                               //      4 system settings
 }                                                           // ======
-PACKED ARINC429;                                            // 10.176 byte (~10 kByte)
+PACKED ARINC429;                                            // 11.788 byte (~11.5 kByte)
 
 
 /****************************************************************************/
@@ -240,6 +244,8 @@ extern ARINC429 arinc429;
 void arinc429_tick(void);
 void arinc429_tick_task(void);
 
+void update_tx_buffer_map(uint8_t channel_index, uint16_t buffer_index, uint8_t task);
+bool  check_tx_buffer_map(uint8_t channel_index, uint16_t buffer_index);
 
 #endif  // ARINC429_H
 
