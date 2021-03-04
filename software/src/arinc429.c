@@ -335,13 +335,12 @@ void arinc429_task_tx_immediate(void)
 			{
 				uint8_t frame[4];   // frame broken down into individual bytes
 				uint8_t data[4];    // transfer buffer for hi3593_write_register()
-				uint8_t next_tail;  // next tail position in TX queue
 
-				// compute the next tail position
-				if(++next_tail >= ARINC429_TX_QUEUE_SIZE) next_tail = 0;
+				// yes, compute the next tail position
+				if(++(channel->tail) >= ARINC429_TX_QUEUE_SIZE) channel->tail = 0;
 
 				// get the frame and convert it from uint32_t to an array of uint8_t
-				memcpy(frame, &channel->queue[next_tail], 4);
+				memcpy(frame, &channel->queue[channel->tail], 4);
 
 				// reverse the byte sequence (the A429 chip wants the highest byte first)
 				data[0] = frame[3];
@@ -354,9 +353,6 @@ void arinc429_task_tx_immediate(void)
 
 				// pulse the TX LED
 				hi3593.led_flicker_state_tx.counter += LED_PULSE_TIME;
-
-				// update the tail
-				channel->tail = next_tail;
 
 				// increment the statistics counter on processed frames
 				channel->common.frames_processed_curr++;
