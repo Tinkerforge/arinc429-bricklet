@@ -92,6 +92,7 @@ BootloaderHandleMessageResponse handle_message(const void *message, void *respon
 
 		case FID_WRITE_FRAME_DIRECT                   : return write_frame_direct                   (message          );
 		case FID_WRITE_FRAME_SCHEDULED                : return write_frame_scheduled                (message          );
+		case FID_SET_FRAME_MODE                       : return set_frame_mode                       (message          );
 
 		case FID_CLEAR_SCHEDULE_ENTRIES               : return clear_schedule_entries               (message          );
 		case FID_SET_SCHEDULE_ENTRY                   : return set_schedule_entry                   (message          );
@@ -437,25 +438,63 @@ BootloaderHandleMessageResponse set_heartbeat_callback_configuration(const SetHe
 {
 	uint8_t  mode;
 
+	// check the parameters, abort if invalid
+	if(!check_channel(data->channel, GROUP_ALL))  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if(data->period > 60000)                      return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
 	// determine the mode - step 1: on_change or unconditional?
 	mode = (data->value_has_to_change == true) ? ARINC429_CALLBACK_ON_CHANGE : ARINC429_CALLBACK_ON;
 
 	// determine the mode - step 2: on(_change) or off?
-	if(data->period == 0)  mode = ARINC429_CALLBACK_OFF;
+	if((data->enabled == false) || (data->period == 0))  mode = ARINC429_CALLBACK_OFF;
 
-	// store the new configuration
-	arinc429.heartbeat.period = (uint16_t)(data->period * 1000);  // period is stored in ms
-	arinc429.heartbeat.mode   = mode;
+	// limit the period
+	uint16_t period = (data->period >= 100) ? data->period : 100;
 
-	// reset the sequence number if the mode is set to 'off'
-	if(mode == ARINC429_CALLBACK_OFF)
+	// do all TX channels
+	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
 	{
-		// restart the sequence numbers from zero
-		arinc429.heartbeat.seq_number = 0;
+		// channel selected?
+		if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1 + i))
+		{
+			// yes, store the new configuration
+			arinc429.tx_channel[i].common.stats_mode     = mode;
+			arinc429.tx_channel[i].common.stats_period   = period;
+
+			// reset the sequence number if the mode is set to 'off'
+			if(mode == ARINC429_CALLBACK_OFF)
+			{
+				// restart the sequence numbers from zero
+				arinc429.tx_channel[i].common.stats_seq_number = 0;
+			}
+
+			// set the reference time for the timing of the next heartbeat
+			arinc429.tx_channel[i].common.stats_last_time = system_timer_get_ms();
+		}
 	}
 
-	// set the reference time for the timing of the next heartbeat
-	arinc429.heartbeat.last_time = system_timer_get_ms();
+	// do all RX channels
+	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
+	{
+		// channel selected?
+		if((data->channel == ARINC429_CHANNEL_RX) || (data->channel == ARINC429_CHANNEL_RX1 + i))
+		{
+			// yes, store the new configuration
+			arinc429.rx_channel[i].common.stats_mode     = mode;
+			arinc429.rx_channel[i].common.stats_period   = data->period;
+
+			// reset the sequence number if the mode is set to 'off'
+			if(mode == ARINC429_CALLBACK_OFF)
+			{
+				// restart the sequence numbers from zero
+				arinc429.rx_channel[i].common.stats_seq_number = 0;
+			}
+
+			// set the reference time for the timing of the next heartbeat
+			arinc429.rx_channel[i].common.stats_last_time = system_timer_get_ms();
+		}
+	}
+
 
 	// done, no response
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
@@ -466,19 +505,31 @@ BootloaderHandleMessageResponse set_heartbeat_callback_configuration(const SetHe
 BootloaderHandleMessageResponse get_heartbeat_callback_configuration(const GetHeartbeatCallbackConfiguration          *data,
                                                                            GetHeartbeatCallbackConfiguration_Response *response)
 {
+	ARINC429Common *config;
+
 	// prepare the response
 	response->header.length = sizeof(GetHeartbeatCallbackConfiguration_Response);
 
-	// collect the response data
-	switch(arinc429.heartbeat.mode)
+	// pick the selected channel
+	switch(data->channel)
 	{
-		default                          : /* FALLTHROUGH */
-		case ARINC429_CALLBACK_OFF       : response->value_has_to_change = false;  break;
-		case ARINC429_CALLBACK_ON        : response->value_has_to_change = false;  break;
-		case ARINC429_CALLBACK_ON_CHANGE : response->value_has_to_change = true;   break;
+		default                   : return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
+		case ARINC429_CHANNEL_TX1 : config = &(arinc429.tx_channel[0].common); break;
+		case ARINC429_CHANNEL_RX1 : config = &(arinc429.rx_channel[0].common); break;
+		case ARINC429_CHANNEL_RX2 : config = &(arinc429.rx_channel[1].common); break;
 	}
 
-	response->period = (uint8_t)(arinc429.heartbeat.period / 1000);  // period was stored in ms
+	// collect the response data
+	switch(config->stats_mode)
+	{
+		default                          : /* FALLTHROUGH */
+		case ARINC429_CALLBACK_OFF       : response->value_has_to_change = false; response->enabled = false; break;
+		case ARINC429_CALLBACK_ON        : response->value_has_to_change = false; response->enabled = true;  break;
+		case ARINC429_CALLBACK_ON_CHANGE : response->value_has_to_change = true;  response->enabled = true;  break;
+	}
+
+	response->period   = config->stats_period;
 
 	// done, send response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
@@ -1003,7 +1054,7 @@ BootloaderHandleMessageResponse get_rx_callback_configuration(const GetRXCallbac
 	}
 
 	// get the response for 'timeout'
-	response->timeout = channel->timeout_period;
+	response->timeout  = channel->timeout_period;
 
 	// done, send response
 	return HANDLE_MESSAGE_RESPONSE_NEW_MESSAGE;
@@ -1026,6 +1077,9 @@ BootloaderHandleMessageResponse write_frame_direct(const WriteFrameDirect *data)
 		{
 			// get a pointer to the channel
 			ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
+
+			// get the current head position
+			next_head = channel->head;
 
 			// compute the next head position
 			if(++next_head >= ARINC429_TX_QUEUE_SIZE) next_head = 0;
@@ -1077,6 +1131,28 @@ BootloaderHandleMessageResponse write_frame_scheduled(const WriteFrameScheduled 
 	return HANDLE_MESSAGE_RESPONSE_EMPTY;
 }
 
+/* set a frame to be transmitted or muted */
+BootloaderHandleMessageResponse set_frame_mode(const SetFrameMode *data)
+{
+	// check the parameters, abort if invalid
+	if(!check_channel(data->channel, GROUP_TX)     )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if( data->frame_index >= ARINC429_TX_BUFFER_NUM)  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+	if( data->mode        >  ARINC429_TX_MODE_MUTE )  return HANDLE_MESSAGE_RESPONSE_INVALID_PARAMETER;
+
+	// do all TX channels
+	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
+	{
+		// channel selected?
+		if((data->channel == ARINC429_CHANNEL_TX) || (data->channel == ARINC429_CHANNEL_TX1 + i))
+		{
+			// yes, eligible (0) / disable (1) the frame for transmit
+			update_tx_buffer_map(i, data->frame_index, data->mode);
+		}
+	}
+
+	// done, no response
+	return HANDLE_MESSAGE_RESPONSE_EMPTY;
+}
 
 /* clear a range of scheduler entries */
 BootloaderHandleMessageResponse clear_schedule_entries(const ClearScheduleEntries *data)
@@ -1265,7 +1341,7 @@ bool handle_callbacks(void)
 	static Heartbeat_Callback  cb_heartbeat;
 	static Frame_Callback      cb_frame;
 	static Scheduler_Callback  cb_scheduler;
-	
+
 	// done if there is no pending message request in the queue
 	if(arinc429.callback.tail == arinc429.callback.head)           return false;
 
@@ -1289,28 +1365,42 @@ bool handle_callbacks(void)
 	// switch on the message type to send
 	switch(message)
 	{
-		case ARINC429_CALLBACK_JOB_HEARTBEAT :
+		case ARINC429_CALLBACK_JOB_STATS_TX1  :  /* FALLTHROUGH */
+		case ARINC429_CALLBACK_JOB_STATS_RX1 :  /* FALLTHROUGH */
+		case ARINC429_CALLBACK_JOB_STATS_RX2 :
 
 			//create the callback message
 			tfp_make_default_header(&cb_heartbeat.header, bootloader_get_uid(), sizeof(Heartbeat_Callback), FID_CALLBACK_HEARTBEAT);
 
 			// collect the callback message data
-			cb_heartbeat.seq_number          = arinc429.heartbeat.seq_number;
+			cb_heartbeat.status              = ARINC429_STATUS_STATISTICS;
 			cb_heartbeat.timestamp           = timestamp;
-			cb_heartbeat.frames_processed[0] = arinc429.tx_channel[0].common.frames_processed_curr;
-			cb_heartbeat.frames_processed[1] = arinc429.rx_channel[0].common.frames_processed_curr;
-			cb_heartbeat.frames_processed[2] = arinc429.rx_channel[1].common.frames_processed_curr;
-			cb_heartbeat.frames_lost[0]      = arinc429.tx_channel[0].common.frames_lost_curr;
-			cb_heartbeat.frames_lost[1]      = arinc429.rx_channel[0].common.frames_lost_curr;
-			cb_heartbeat.frames_lost[2]      = arinc429.rx_channel[1].common.frames_lost_curr;
 
-			// increment the sequence number, thereby skipping the value 0
-			if(++arinc429.heartbeat.seq_number == 0)  arinc429.heartbeat.seq_number = 1;
+			if (message == ARINC429_CALLBACK_JOB_STATS_TX1)
+			{
+				cb_heartbeat.channel          = ARINC429_CHANNEL_TX1;
+				cb_heartbeat.seq_number       = arinc429.tx_channel[0].common.stats_seq_number;
+				cb_heartbeat.frames_processed = arinc429.tx_channel[0].common.frames_processed_curr;
+				cb_heartbeat.frames_lost      = arinc429.tx_channel[0].common.frames_lost_curr;
+
+				// increment the sequence number, thereby skipping the value 0
+				if(++arinc429.tx_channel[0].common.stats_seq_number == 0)  arinc429.tx_channel[0].common.stats_seq_number = 1;
+			}
+			else
+			{
+				cb_heartbeat.channel          = ARINC429_CHANNEL_RX1 + (message & 1);
+				cb_heartbeat.seq_number       = arinc429.rx_channel[message & 1].common.stats_seq_number;
+				cb_heartbeat.frames_processed = arinc429.rx_channel[message & 1].common.frames_processed_curr;
+				cb_heartbeat.frames_lost      = arinc429.rx_channel[message & 1].common.frames_lost_curr;
+
+				// increment the sequence number, thereby skipping the value 0
+				if(++arinc429.rx_channel[message & 1].common.stats_seq_number == 0)  arinc429.rx_channel[message & 1].common.stats_seq_number = 1;
+			}
 
 			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_heartbeat, sizeof(Heartbeat_Callback));
 
-			// ARINC429_CALLBACK_JOB_HEARTBEAT done
+			// ARINC429_CALLBACK_JOB_STATS_* done
 			break;
 
 
@@ -1322,26 +1412,26 @@ bool handle_callbacks(void)
 
 			// collect the callback message data
 			cb_frame.channel    = ARINC429_CHANNEL_RX1 + (message & 1);
-			cb_frame.seq_number = arinc429.callback.seq_number_frame;
 			cb_frame.timestamp  = timestamp;
+			cb_frame.seq_number = arinc429.rx_channel[message & 1].common.frame_seq_number;
 			cb_frame.frame      = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
 
 			// new or update?
 			if(arinc429.rx_channel[message & 1].frame_buffer[buffer].frame_age > 60000)
 			{
 				// new
-				cb_frame.frame_status = ARINC429_FRAME_STATUS_NEW;
-				cb_frame.age          = 0;
+				cb_frame.status = ARINC429_STATUS_NEW;
+				cb_frame.age    = 0;
 			}
 			else
 			{
 				// update
-				cb_frame.frame_status = ARINC429_FRAME_STATUS_UPDATE;
-				cb_frame.age          = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame_age;
+				cb_frame.status = ARINC429_STATUS_UPDATE;
+				cb_frame.age    = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame_age;
 			}
 
 			// increment the sequence number, thereby skipping the value 0
-			if(++arinc429.callback.seq_number_frame == 0)  arinc429.callback.seq_number_frame = 1;
+			if(++arinc429.rx_channel[message & 1].common.frame_seq_number == 0)  arinc429.rx_channel[message & 1].common.frame_seq_number = 1;
 
 			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_frame, sizeof(Frame_Callback));
@@ -1357,15 +1447,15 @@ bool handle_callbacks(void)
 			tfp_make_default_header(&cb_frame.header, bootloader_get_uid(), sizeof(Frame_Callback), FID_CALLBACK_FRAME_MESSAGE);
 
 			// collect the callback message data
-			cb_frame.channel      = ARINC429_CHANNEL_RX1 + (message & 1);
-			cb_frame.seq_number   = arinc429.callback.seq_number_frame;
-			cb_frame.timestamp    = timestamp;
-			cb_frame.frame_status = ARINC429_FRAME_STATUS_TIMEOUT;
-			cb_frame.frame        = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
-			cb_frame.age          = arinc429.rx_channel[message & 1].timeout_period;
+			cb_frame.channel    = ARINC429_CHANNEL_RX1 + (message & 1);
+			cb_frame.timestamp  = timestamp;
+			cb_frame.status     = ARINC429_STATUS_TIMEOUT;
+			cb_frame.seq_number = arinc429.rx_channel[message & 1].common.frame_seq_number;
+			cb_frame.frame      = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
+			cb_frame.age        = arinc429.rx_channel[message & 1].timeout_period;
 
 			// increment the sequence number, thereby skipping the value 0
-			if(++arinc429.callback.seq_number_frame == 0)  arinc429.callback.seq_number_frame = 1;
+			if(++arinc429.rx_channel[message & 1].common.frame_seq_number == 0)  arinc429.rx_channel[message & 1].common.frame_seq_number = 1;
 
 			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_frame, sizeof(Frame_Callback));
@@ -1380,13 +1470,13 @@ bool handle_callbacks(void)
 			tfp_make_default_header(&cb_scheduler.header, bootloader_get_uid(), sizeof(Scheduler_Callback), FID_CALLBACK_SCHEDULER_MESSAGE);
 
 			// collect the callback message data
-			cb_scheduler.channel      = ARINC429_CHANNEL_TX1 + (message & 1);
-			cb_scheduler.seq_number   = arinc429.callback.seq_number_scheduler;
+			cb_scheduler.userdata     = buffer;
 			cb_scheduler.timestamp    = timestamp;
-			cb_scheduler.token        = buffer;
+			cb_heartbeat.status       = ARINC429_STATUS_SCHEDULER;
+			cb_scheduler.seq_number   = arinc429.tx_channel[0].common.frame_seq_number;
 
 			// increment the sequence number, thereby skipping the value 0
-			if(++arinc429.callback.seq_number_scheduler == 0)  arinc429.callback.seq_number_scheduler = 1;
+			if(++arinc429.tx_channel[0].common.frame_seq_number == 0)  arinc429.tx_channel[0].common.frame_seq_number = 1;
 
 			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_scheduler, sizeof(Scheduler_Callback));

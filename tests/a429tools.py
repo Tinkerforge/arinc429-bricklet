@@ -4,16 +4,15 @@
 #                                                                            #
 #  A429 Tools for creating Frames and writing / reading Data to/from Frames  #
 #                                                                            #
-#  V0.9  26.02.2021, Ralph Lembcke                                           #
+#  V0.92  5.03.2021, Ralph Lembcke                                           #
 #                                                                            #
 ##############################################################################
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-# constants
+# constants - !!! keep in line with the A429 Bricklet API !!!
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-FRAME_FORMAT_RAW      = 0
 FRAME_FORMAT_BCD      = 1
 FRAME_FORMAT_BNR      = 2
 FRAME_FORMAT_DISCRETE = 3
@@ -23,17 +22,20 @@ SSM_NO    = 1
 SSM_NCD   = 2
 SSM_FW    = 3
 SSM_FT    = 4
-SSM_PLUS  = 5  # for internal use only
-SSM_MINUS = 6  # for internal use only
+SSM_PLUS  = 5
+SSM_MINUS = 6
 
-
-# keep the following assignments in line with the A429 bricklet library:
-
-SDI_0    = 0
-SDI_1    = 1
-SDI_2    = 2
-SDI_3    = 3
+SDI_SDI0 = 0
+SDI_SDI1 = 1
+SDI_SDI2 = 2
+SDI_SDI3 = 3
 SDI_DATA = 4
+
+CHANNEL_TX  = 0
+CHANNEL_TX1 = 1
+CHANNEL_RX  = 32
+CHANNEL_RX1 = 33
+CHANNEL_RX2 = 34
 
 PARITY_DATA = 0
 PARITY_AUTO = 1
@@ -41,21 +43,27 @@ PARITY_AUTO = 1
 SPEED_HS = 0
 SPEED_LS = 1
 
-FRAME_STATUS_NEW     = 0
-FRAME_STATUS_UPDATE  = 1
+CHANNEL_MODE_PASSIVE = 0
+CHANNEL_MODE_ACTIVE = 1
+CHANNEL_MODE_RUN = 2
+
+FRAME_STATUS_NEW = 0
+FRAME_STATUS_UPDATE = 1
 FRAME_STATUS_TIMEOUT = 2
 
-CHANNEL_TX   = 0
-CHANNEL_TX1  = 1
-CHANNEL_TX2  = 2
-CHANNEL_TX3  = 3
-CHANNEL_TX4  = 4
+SCHEDULER_JOB_SKIP = 0
+SCHEDULER_JOB_CALLBACK = 1
+SCHEDULER_JOB_STOP = 2
+SCHEDULER_JOB_JUMP = 3
+SCHEDULER_JOB_RETURN = 4
+SCHEDULER_JOB_DWELL = 5
+SCHEDULER_JOB_SINGLE = 6
+SCHEDULER_JOB_CYCLIC = 7
+SCHEDULER_JOB_RETRANS_RX1 = 8
+SCHEDULER_JOB_RETRANS_RX2 = 9
 
-CHANNEL_RX   = 32
-CHANNEL_RX1  = 33
-CHANNEL_RX2  = 34
-CHANNEL_RX3  = 35
-CHANNEL_RX4  = 36
+TX_MODE_TRANSMIT = 0
+TX_MODE_MUTE     = 1
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -205,7 +213,7 @@ def speed2text(speed) :
     return 'error - undefined speed encoding'
 
 
-def ssm2text(ssm) :
+def ssm2long_text(ssm) :
     """
     ssm2text(parity)
 
@@ -218,6 +226,20 @@ def ssm2text(ssm) :
     elif (ssm == SSM_FT  ) : return  'FT (functional test)'
     else                   : return  'error - undefined SSM encoding'
 
+
+def ssm2text(ssm) :
+    """
+
+    ssm2text(parity)
+
+    converts a SSM enum value into a human-readable string
+    """
+    if   (ssm == SSM_DATA) : return 'data'
+    elif (ssm == SSM_NO  ) : return 'NO'
+    elif (ssm == SSM_NCD ) : return 'NCD'
+    elif (ssm == SSM_FW  ) : return 'FW'
+    elif (ssm == SSM_FT  ) : return 'FT'
+    else                   : return 'error'
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # high level functions
@@ -285,6 +307,15 @@ def readSDI(frame) :
     """
     # extract bits 8..9
     return (frame & 0x00000300) >> 8
+
+
+def readLabelSDI(frame) :
+    """
+    readLabelSDI(frame)
+
+    Delivers the values of the label and the SDI as a tupel in binary format.
+    """
+    return frame & 0x000000FF, (frame & 0x00000300) >> 8
 
 
 def readRawSSM(frame) :
@@ -407,7 +438,7 @@ def setValue(frame, a429_frame_format, lsb_position, size, \
             data_value = twos_complement(data_value, size)
 
             # place the negative marker into the frame
-            if (sign < 0) : frame |= 1 << 28
+            frame |= 1 << 28
 
         # encode the SSM value
         if   (ssm_value == SSM_FW ) : ssm = 0
@@ -444,7 +475,7 @@ def setValue(frame, a429_frame_format, lsb_position, size, \
     frame |=  ((data_value ) << (lsb_position - 1))
 
     # done in case the SSM bits are used for data
-    if ((ssm_value == SSM_DATA) or (lsb_position + size > 29)) : return frame
+    if ((ssm_value == SSM_DATA) or (lsb_position + size > 30)) : return frame
 
     # clear the existing SSM value and insert the new SSM value
     frame &= ~( 3  << 29)
@@ -556,12 +587,12 @@ def getValue(frame, a429_frame_format, lsb_position, size, \
         engineering_value = data_value
 
         # conditionally decode the SSM
-        if (lsb_position + size < 30) :
+        if (lsb_position + size <= 30) :
             if   (data_ssm == 0) : ssm_value = SSM_NO
             elif (data_ssm == 1) : ssm_value = SSM_NCD
             elif (data_ssm == 2) : ssm_value = SSM_FT
             elif (data_ssm == 3) : ssm_value = SSM_FW
-
+        else                     : ssm_value = SSM_DATA
 
     else :
 

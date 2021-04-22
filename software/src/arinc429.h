@@ -93,17 +93,6 @@
 /* DATA STRUCTURES (--> all data structures are word-aligned to 32 bit <--) */
 /****************************************************************************/
 
-// heartbeat
-typedef struct
-{
-	uint32_t         last_time;                             //     4 time when last heartbeat was sent
-	uint16_t         period;                                //     2 heartbeat period
-	uint8_t          mode;                                  //     1 mode: off, on, on change only
-	uint8_t          seq_number;                            //     1 next sequence number
-}                                                           // =====
-PACKED ARINC429Heartbeat;                                   //     8 byte
-
-
 // callback queue
 typedef struct
 {
@@ -119,12 +108,9 @@ typedef struct
 {
 	uint16_t         head;                                  //     2 message queue head index
 	uint16_t         tail;                                  //     2 message queue tail index
-	uint16_t         spare;                                 //     2 unused / for alignment purpose
-	uint8_t          seq_number_frame;                      //     1 sequence number of the frame     message callback
-	uint8_t          seq_number_scheduler;                  //     1 sequence number of the scheduler message callback
 	ARINC429CBQueue  queue[ARINC429_CB_QUEUE_SIZE];         // 1.200 message queue (ring buffer)
 }                                                           // =====
-PACKED ARINC429Callback;                                    // 1.208 byte
+PACKED ARINC429Callback;                                    // 1.204 byte
 
 
 // common config and status data for all channel types
@@ -136,20 +122,30 @@ typedef struct
 	uint8_t          callback_mode;                         //     1 callback  mode
 	uint8_t          change_request;                        //     1 pending configuration change
 
-	// statistics
+	// frame / scheduler callback
+	uint8_t          spare1;                                //     1 unused / for alignment purpose
+	uint8_t          spare2;                                //     1 unused / for alignment purpose
+	uint8_t          spare3;                                //     1 unused / for alignment purpose
+	uint8_t          frame_seq_number;                      //     1 sequence number for the frame / scheduler message callback
+
+	// statistics callback
+	uint8_t          stats_seq_number;                      //     1 next sequence number for statistics callback
+	uint8_t          stats_mode;                            //     1 mode: off, on, on change only
+	uint16_t         stats_period;                          //     2 heartbeat period
+	uint32_t         stats_last_time;                       //     4 time when last heartbeat was sent
 	uint16_t         frames_processed_curr;                 //     2 statistics counter - processed frames - current       value
 	uint16_t         frames_processed_last;                 //     2 statistics counter - processed frames - last reported value
 	uint16_t         frames_lost_curr;                      //     2 statistics counter - dropped   frames - current       value
 	uint16_t         frames_lost_last;                      //     2 statistics counter - dropped   frames - last reported value
 }                                                           // =====
-PACKED ARINC429Common;                                      //    12 byte
+PACKED ARINC429Common;                                      //    24 byte
 
 
 // config and status of a TX channel
 typedef struct
 {
 	// common part
-	ARINC429Common   common;                                //     12 common config and status data for all channel types
+	ARINC429Common   common;                                //     24 common config and status data for all channel types
 
 	// immediate transmit
 	uint32_t         queue[ARINC429_TX_QUEUE_SIZE];         //     64 frame queue
@@ -170,7 +166,7 @@ typedef struct
 	uint32_t         frame_buffer[ARINC429_TX_BUFFER_NUM];  //  1.024 scheduled TX frames
 	uint32_t         frame_buffer_map[8];                   //     32 single transmit status tracking
 }                                                           //  =====
-PACKED ARINC429TXChannel;                                   //  4.072 byte
+PACKED ARINC429TXChannel;                                   //  4.164 byte
 
 
 // received frame buffer
@@ -187,7 +183,7 @@ PACKED ARINC429RXBuffer;                                    //     8 byte
 typedef struct
 {
 	// common part
-	ARINC429Common   common;                                //     12 common config and status data for all channel types
+	ARINC429Common   common;                                //     24 common config and status data for all channel types
 
 	// timeout check
 	uint16_t         timeout_period;                        //      2 timeout time [ms]
@@ -203,7 +199,7 @@ typedef struct
 	// hardware frame filters
 	uint8_t          hardware_filter[32];                   //     32 hardware filter assignment table
 }                                                           //  =====
-PACKED ARINC429RXChannel;                                   //  3.248 byte
+PACKED ARINC429RXChannel;                                   //  3.260 byte
 
 
 // system settings
@@ -221,18 +217,17 @@ PACKED ARINC429System;                                      //      4 byte
 typedef struct
 {
 	// channels
-	ARINC429TXChannel tx_channel[ARINC429_TX_CHANNELS_NUM]; //  4.072 TX channels
-	ARINC429RXChannel rx_channel[ARINC429_RX_CHANNELS_NUM]; //  6.496 RX channels
+	ARINC429TXChannel tx_channel[ARINC429_TX_CHANNELS_NUM]; //  4.164 TX channels
+	ARINC429RXChannel rx_channel[ARINC429_RX_CHANNELS_NUM]; //  6.520 RX channels
 
-	// callbacks
-	ARINC429Heartbeat heartbeat;                            //      8 bricklet heartbeat
-	ARINC429Callback  callback;                             //  1.208 callback queue
+	// callback queue
+	ARINC429Callback  callback;                             //  1.204 callback queue
 
 	// system - Attention: needs to be placed at the end
 	//                     of the ARINC429 data structure!
 	ARINC429System    system;                               //      4 system settings
 }                                                           // ======
-PACKED ARINC429;                                            // 11.788 byte (~11.5 kByte)
+PACKED ARINC429;                                            // 11.892 byte (~11.6 kByte)
 
 
 /****************************************************************************/

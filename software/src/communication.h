@@ -57,30 +57,10 @@ void communication_init(void);
 
 #define ARINC429_CHANNEL_TX                0  // all TX channels
 #define ARINC429_CHANNEL_TX1               1  // TX channel #1
-#define ARINC429_CHANNEL_TX2               2  // not used
-#define ARINC429_CHANNEL_TX3               3  // ...
-#define ARINC429_CHANNEL_TX4               4  // ...
-#define ARINC429_CHANNEL_TX5               5  // ...
-#define ARINC429_CHANNEL_TX6               6  // ...
-#define ARINC429_CHANNEL_TX7               7  // ...
-#define ARINC429_CHANNEL_TX8               8  // ...
-#define ARINC429_CHANNEL_TX9               9  // ...
-#define ARINC429_CHANNEL_TX10             10  // ...
-#define ARINC429_CHANNEL_TX11             11  // ...
-#define ARINC429_CHANNEL_TX12             12  // ...
+
 #define ARINC429_CHANNEL_RX               32  // all RX channels
 #define ARINC429_CHANNEL_RX1              33  // RX channel #1
 #define ARINC429_CHANNEL_RX2              34  // RX channel #2
-#define ARINC429_CHANNEL_RX3              35  // not used
-#define ARINC429_CHANNEL_RX4              36  // ...
-#define ARINC429_CHANNEL_RX5              37  // ...
-#define ARINC429_CHANNEL_RX6              38  // ...
-#define ARINC429_CHANNEL_RX7              39  // ...
-#define ARINC429_CHANNEL_RX8              40  // ...
-#define ARINC429_CHANNEL_RX9              41  // ...
-#define ARINC429_CHANNEL_RX10             42  // ...
-#define ARINC429_CHANNEL_RX11             43  // ...
-#define ARINC429_CHANNEL_RX12             44  // ...
 
 #define ARINC429_SDI0                      0  // SDI bits used for address extension, SDI 0
 #define ARINC429_SDI1                      1  // SDI bits used for address extension, SDI 1
@@ -101,9 +81,11 @@ void communication_init(void);
 #define ARINC429_PRIORITY_DISABLED         0  // RX priority buffers disabled
 #define ARINC429_PRIORITY_ENABLED          1  // RX priority buffers enabled
 
-#define ARINC429_FRAME_STATUS_NEW          0  // new     frame received (or 1st frame after a timeout)
-#define ARINC429_FRAME_STATUS_UPDATE       1  // updated frame received
-#define ARINC429_FRAME_STATUS_TIMEOUT      2  // frame is overdue (frame data are last data received)
+#define ARINC429_STATUS_NEW                0  // new     frame received (or 1st frame after a timeout)
+#define ARINC429_STATUS_UPDATE             1  // updated frame received
+#define ARINC429_STATUS_TIMEOUT            2  // frame is overdue (frame data are last data received)
+#define ARINC429_STATUS_SCHEDULER          3  // scheduler message
+#define ARINC429_STATUS_STATISTICS         4  // scheduler message
 
 #define ARINC429_SCHEDULER_JOB_SKIP        0  // scheduler job code for for an unused task table entry
 #define ARINC429_SCHEDULER_JOB_CALLBACK    1  // scheduler job code for sending a callback
@@ -116,6 +98,9 @@ void communication_init(void);
 #define ARINC429_SCHEDULER_JOB_RETRANS_RX1 8  // scheduler job code for retransmission of a a frame received on RX1
 #define ARINC429_SCHEDULER_JOB_RETRANS_RX2 9  // scheduler job code for retransmission of a a frame received on RX2
 
+#define ARINC429_TX_MODE_TRANSMIT          0  // transmit the frame / trigger a new single transmit | keep in line with ARINC429_SET   (enable  TX)
+#define ARINC429_TX_MODE_MUTE              1  // do not transmit the frame                          | keep in line with ARINC429_CLEAR (disable TX)
+
 
 // internal parameters encoding
 
@@ -123,12 +108,14 @@ void communication_init(void);
 #define ARINC429_A429_MODE_DEBUG           1  // high-level A429 operations are stopped for low-level debug access
 
 #define ARINC429_CALLBACK_JOB_NONE         0  // callback job code for 'nothing to do'
-#define ARINC429_CALLBACK_JOB_HEARTBEAT    1  // callback job code for a heartbeat    event
-#define ARINC429_CALLBACK_JOB_FRAME_RX1    2  // callback job code for a RX new frame event, bit 0 = 0 -> RX channel 1
-#define ARINC429_CALLBACK_JOB_FRAME_RX2    3  // callback job code for a RX new frame event, bit 0 = 1 -> RX channel 2
-#define ARINC429_CALLBACK_JOB_TIMEOUT_RX1  4  // callback job code for a RX timeout   event, bit 0 = 0 -> RX channel 1
-#define ARINC429_CALLBACK_JOB_TIMEOUT_RX2  5  // callback job code for a RX timeout   event, bit 0 = 1 -> RX channel 2
-#define ARINC429_CALLBACK_JOB_SCHEDULER_CB 6  // callback job code for a TX scheduler event, bit 0 = 0 -> TX channel 1
+#define ARINC429_CALLBACK_JOB_STATS_TX1    1  // callback job code for a TX statistics event
+#define ARINC429_CALLBACK_JOB_STATS_RX1    2  // callback job code for a RX statistics event, bit 0 = 0 -> RX channel 1
+#define ARINC429_CALLBACK_JOB_STATS_RX2    3  // callback job code for a RX statistics event, bit 0 = 1 -> RX channel 2
+#define ARINC429_CALLBACK_JOB_FRAME_RX1    4  // callback job code for a RX new frame  event, bit 0 = 0 -> RX channel 1
+#define ARINC429_CALLBACK_JOB_FRAME_RX2    5  // callback job code for a RX new frame  event, bit 0 = 1 -> RX channel 2
+#define ARINC429_CALLBACK_JOB_TIMEOUT_RX1  6  // callback job code for a RX timeout    event, bit 0 = 0 -> RX channel 1
+#define ARINC429_CALLBACK_JOB_TIMEOUT_RX2  7  // callback job code for a RX timeout    event, bit 0 = 1 -> RX channel 2
+#define ARINC429_CALLBACK_JOB_SCHEDULER_CB 8  // callback job code for a TX scheduler  event
 
 #define ARINC429_CALLBACK_OFF              0  // callback disabled
 #define ARINC429_CALLBACK_ON               1  // callback enabled
@@ -182,6 +169,7 @@ void communication_init(void);
 #define FID_GET_SCHEDULE_ENTRY                       22
 #define FID_RESTART                                  23
 #define FID_CALLBACK_SCHEDULER_MESSAGE               24
+#define FID_SET_FRAME_MODE                           25
 
 
 /****************************************************************************/
@@ -207,20 +195,24 @@ typedef struct {
 // set_heartbeat_callback_configuration()
 typedef struct {
 	TFPMessageHeader  header;                 // message header
-	uint8_t           period;                 // heartbeat period
-	bool              value_has_to_change;    // delay heartbeat in case values have not changed
+	uint8_t           channel;                // selected channel
+	bool              enabled;                // callback enabled / disabled
+	bool              value_has_to_change;    // callback on changed frame data only
+	uint16_t          period;                 // period setting
 } __attribute__((__packed__)) SetHeartbeatCallbackConfiguration;
 
 
 // get_heartbeat_callback_configuration()
 typedef struct {
 	TFPMessageHeader  header;                 // message header
+	uint8_t           channel;                // selected channel
 } __attribute__((__packed__)) GetHeartbeatCallbackConfiguration;
 
 typedef struct {
 	TFPMessageHeader  header;                 // message header
-	uint8_t           period;                 // heartbeat period
-	bool              value_has_to_change;    // heartbeat is delayed in case values have not changed
+	bool              enabled;                // callback enabled / disabled
+	bool              value_has_to_change;    // callback on changed frame data only
+	uint16_t          period;                 // period setting
 } __attribute__((__packed__)) GetHeartbeatCallbackConfiguration_Response;
 
 
@@ -421,16 +413,26 @@ typedef struct {
 } __attribute__((__packed__)) Restart;
 
 
+// set_frame_mode()
+typedef struct {
+	TFPMessageHeader  header;                 // message header
+	uint8_t           channel;                // selected channel: ARINC429_CHANNEL_TX1
+	uint16_t          frame_index;            // index number in frame table selecting frame to send
+	uint8_t           mode;                   // selected TX mode
+} __attribute__((__packed__)) SetFrameMode;
+
+
 /*** output data structures - callbacks ***/
 
 // bricklet heartbeat callback
-#define TCN           3                       // total number of channels - copy of ARINC429_CHANNEL_TOTAL_NUM from arinc429.h
 typedef struct {
 	TFPMessageHeader  header;                 // message header
+	uint8_t           channel;                // channel this heartbeat is valid for
+	uint8_t           status;                 // reason for the callback: ARINC429_STATUS_STATISTICS
 	uint8_t           seq_number;             // sequence number of the heartbeat message
 	uint16_t          timestamp;              // time of message creation
-	uint16_t          frames_processed[TCN];  // statistics counter - processed frames
-	uint16_t          frames_lost[TCN];       // statistics counter - lost      frames
+	uint16_t          frames_processed;       // statistics counter - processed frames
+	uint16_t          frames_lost;            // statistics counter - lost      frames
 } __attribute__((__packed__)) Heartbeat_Callback;
 
 
@@ -438,9 +440,9 @@ typedef struct {
 typedef struct {
 	TFPMessageHeader  header;                 // message header
 	uint8_t           channel;                // channel on which the frame was received
+	uint8_t           status;                 // reason for the callback: ARINC429_STATUS_NEW, _UPDATE, _TIMEOUT
 	uint8_t           seq_number;             // sequence number of the rx callback message
 	uint16_t          timestamp;              // time of message creation
-	uint8_t           frame_status;           // reason for callback: ARINC429_FRAME_STATUS_*
 	uint32_t          frame;                  // complete A429 frame received (data and label) 
 	uint16_t          age;                    // time elapsed since last reception of a frame with this label and SDI, in [ms]
 } __attribute__((__packed__)) Frame_Callback;
@@ -449,10 +451,10 @@ typedef struct {
 // scheduler message callback
 typedef struct {
 	TFPMessageHeader  header;                 // message header
-	uint8_t           channel;                // channel on which the message was generated
+	uint8_t           userdata;               // user data from scheduler callback job
+	uint8_t           status;                 // reason for the callback: ARINC429_STATUS_SCHEDULER
 	uint8_t           seq_number;             // sequence number of the rx callback message
 	uint16_t          timestamp;              // time of message creation
-	uint8_t           token;                  // arbitrary number selected by the user when setting up the callback job
 } __attribute__((__packed__)) Scheduler_Callback;
 
 
@@ -498,6 +500,8 @@ BootloaderHandleMessageResponse set_schedule_entry                  (const SetSc
 BootloaderHandleMessageResponse get_schedule_entry                  (const GetScheduleEntry                  *data, GetScheduleEntry_Response                  *response);
 
 BootloaderHandleMessageResponse restart                             (const Restart                           *data                                                      );
+
+BootloaderHandleMessageResponse set_frame_mode                      (const SetFrameMode                      *data                                                      );
 
 
 /*** function prototypes - callbacks ***/

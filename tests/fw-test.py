@@ -18,21 +18,21 @@ import time
 
 
 # callback function for the heartbeat
-def heartbeat_cb(seq_number, timestamp, frames_processed, frames_lost) :
+def heartbeat_cb(channel, status, seq_number, timestamp, frames_processed, frames_lost) :
 
-    print('Heartbeat #', seq_number, ' processed =', frames_processed, ' lost =', frames_lost, ' timestamp =', timestamp)
+    print('Heartbeat #', seq_number, ' channel =', channel, ' processed =', frames_processed, ' lost =', frames_lost, ' timestamp =', timestamp)
 
 
-#callback function for the frame message
-def frame_cb(channel, seq_number, timestamp, status, frame, age) :
+# callback function for the frame message
+def frame_cb(channel, status, seq_number, timestamp, frame, age) :
 
     print('new Frame #', seq_number, ' channel =', channel, ' status =', status, ' frame =', frame, ' age =', age, 'ms', ' timestamp =', timestamp)
 
 
-#callback function for the scheduler message
-def scheduler_cb(channel, seq_number, timestamp, token) :
+# callback function for the scheduler message
+def scheduler_cb(userdata, status, seq_number, timestamp) :
 
-    print('Scheduler #', seq_number, ' channel =', channel, ' token =', token, ' timestamp =', timestamp)  
+    print('Scheduler #', seq_number, ' userdata =', userdata, ' timestamp =', timestamp)  
 
 
 # main function
@@ -339,17 +339,17 @@ if __name__ == "__main__":
     print('---------')
 
     # register callback function
-    a429.register_callback(a429.CALLBACK_HEARTBEAT, heartbeat_cb)
+    a429.register_callback(a429.CALLBACK_HEARTBEAT_MESSAGE, heartbeat_cb)
 
     # configure callback
-    a429.set_heartbeat_callback_configuration(period = 1, value_has_to_change = False)
+    a429.set_heartbeat_callback_configuration(channel = a429.CHANNEL_RX1, enabled = True, value_has_to_change = False, period = 1000)
 
     print('heartbeat configured')
 
     # configuration read-back
-    ret = a429.get_heartbeat_callback_configuration()
+    ret = a429.get_heartbeat_callback_configuration(channel = a429.CHANNEL_RX1)
 
-    print('heartbeat read-back: period =', ret.period, 'value-has-to-change =', ret.value_has_to_change)
+    print('heartbeat read-back: enabled =', ret.enabled, ', period =', ret.period, ', value-has-to-change =', ret.value_has_to_change)
 
     input("\npress <enter> key to continue...\n\n") # use raw_input() in Python 2
 

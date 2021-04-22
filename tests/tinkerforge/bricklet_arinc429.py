@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 #############################################################
-# This file was automatically generated on 2021-01-24.      #
+# This file was automatically generated on 2021-04-22.      #
 #                                                           #
-# Python Bindings Version 2.1.26                            #
+# Python Bindings Version 2.1.28                            #
 #                                                           #
 # If you have a bugfix for this file and want to commit it, #
 # please fix the bug in the generator. You can find a link  #
@@ -19,7 +19,7 @@ except ValueError:
     from ip_connection import Device, IPConnection, Error, create_char, create_char_list, create_string, create_chunk_data
 
 GetCapabilities = namedtuple('Capabilities', ['tx_total_scheduler_jobs', 'tx_used_scheduler_jobs', 'rx_total_frame_filters', 'rx_used_frame_filters'])
-GetHeartbeatCallbackConfiguration = namedtuple('HeartbeatCallbackConfiguration', ['period', 'value_has_to_change'])
+GetHeartbeatCallbackConfiguration = namedtuple('HeartbeatCallbackConfiguration', ['enabled', 'value_has_to_change', 'period'])
 GetChannelConfiguration = namedtuple('ChannelConfiguration', ['parity', 'speed'])
 ReadFrame = namedtuple('ReadFrame', ['status', 'frame', 'age'])
 GetRXCallbackConfiguration = namedtuple('RXCallbackConfiguration', ['enabled', 'value_has_to_change', 'timeout'])
@@ -29,14 +29,14 @@ GetIdentity = namedtuple('Identity', ['uid', 'connected_uid', 'position', 'hardw
 
 class BrickletARINC429(Device):
     """
-    TBD
+    ARINC429 single transmitter and dual receiver
     """
 
     DEVICE_IDENTIFIER = 2160
     DEVICE_DISPLAY_NAME = 'ARINC429 Bricklet'
     DEVICE_URL_PART = 'arinc429' # internal
 
-    CALLBACK_HEARTBEAT = 4
+    CALLBACK_HEARTBEAT_MESSAGE = 4
     CALLBACK_FRAME_MESSAGE = 17
     CALLBACK_SCHEDULER_MESSAGE = 24
 
@@ -62,6 +62,7 @@ class BrickletARINC429(Device):
     FUNCTION_SET_SCHEDULE_ENTRY = 21
     FUNCTION_GET_SCHEDULE_ENTRY = 22
     FUNCTION_RESTART = 23
+    FUNCTION_SET_FRAME_MODE = 25
     FUNCTION_GET_SPITFP_ERROR_COUNT = 234
     FUNCTION_SET_BOOTLOADER_MODE = 235
     FUNCTION_GET_BOOTLOADER_MODE = 236
@@ -77,30 +78,9 @@ class BrickletARINC429(Device):
 
     CHANNEL_TX = 0
     CHANNEL_TX1 = 1
-    CHANNEL_TX2 = 2
-    CHANNEL_TX3 = 3
-    CHANNEL_TX4 = 4
-    CHANNEL_TX5 = 5
-    CHANNEL_TX6 = 6
-    CHANNEL_TX7 = 7
-    CHANNEL_TX8 = 8
-    CHANNEL_TX9 = 9
-    CHANNEL_TX10 = 10
-    CHANNEL_TX11 = 11
-    CHANNEL_TX12 = 12
     CHANNEL_RX = 32
     CHANNEL_RX1 = 33
     CHANNEL_RX2 = 34
-    CHANNEL_RX3 = 35
-    CHANNEL_RX4 = 36
-    CHANNEL_RX5 = 37
-    CHANNEL_RX6 = 38
-    CHANNEL_RX7 = 39
-    CHANNEL_RX8 = 40
-    CHANNEL_RX9 = 41
-    CHANNEL_RX10 = 42
-    CHANNEL_RX11 = 43
-    CHANNEL_RX12 = 44
     SDI_SDI0 = 0
     SDI_SDI1 = 1
     SDI_SDI2 = 2
@@ -113,9 +93,11 @@ class BrickletARINC429(Device):
     CHANNEL_MODE_PASSIVE = 0
     CHANNEL_MODE_ACTIVE = 1
     CHANNEL_MODE_RUN = 2
-    FRAME_STATUS_NEW = 0
-    FRAME_STATUS_UPDATE = 1
-    FRAME_STATUS_TIMEOUT = 1
+    STATUS_NEW = 0
+    STATUS_UPDATE = 1
+    STATUS_TIMEOUT = 2
+    STATUS_SCHEDULER = 3
+    STATUS_STATISTICS = 4
     SCHEDULER_JOB_SKIP = 0
     SCHEDULER_JOB_CALLBACK = 1
     SCHEDULER_JOB_STOP = 2
@@ -126,6 +108,8 @@ class BrickletARINC429(Device):
     SCHEDULER_JOB_CYCLIC = 7
     SCHEDULER_JOB_RETRANS_RX1 = 8
     SCHEDULER_JOB_RETRANS_RX2 = 9
+    TX_MODE_TRANSMIT = 0
+    TX_MODE_MUTE = 1
     BOOTLOADER_MODE_BOOTLOADER = 0
     BOOTLOADER_MODE_FIRMWARE = 1
     BOOTLOADER_MODE_BOOTLOADER_WAIT_FOR_REBOOT = 2
@@ -172,6 +156,7 @@ class BrickletARINC429(Device):
         self.response_expected[BrickletARINC429.FUNCTION_SET_SCHEDULE_ENTRY] = BrickletARINC429.RESPONSE_EXPECTED_FALSE
         self.response_expected[BrickletARINC429.FUNCTION_GET_SCHEDULE_ENTRY] = BrickletARINC429.RESPONSE_EXPECTED_ALWAYS_TRUE
         self.response_expected[BrickletARINC429.FUNCTION_RESTART] = BrickletARINC429.RESPONSE_EXPECTED_FALSE
+        self.response_expected[BrickletARINC429.FUNCTION_SET_FRAME_MODE] = BrickletARINC429.RESPONSE_EXPECTED_FALSE
         self.response_expected[BrickletARINC429.FUNCTION_GET_SPITFP_ERROR_COUNT] = BrickletARINC429.RESPONSE_EXPECTED_ALWAYS_TRUE
         self.response_expected[BrickletARINC429.FUNCTION_SET_BOOTLOADER_MODE] = BrickletARINC429.RESPONSE_EXPECTED_ALWAYS_TRUE
         self.response_expected[BrickletARINC429.FUNCTION_GET_BOOTLOADER_MODE] = BrickletARINC429.RESPONSE_EXPECTED_ALWAYS_TRUE
@@ -185,9 +170,9 @@ class BrickletARINC429(Device):
         self.response_expected[BrickletARINC429.FUNCTION_READ_UID] = BrickletARINC429.RESPONSE_EXPECTED_ALWAYS_TRUE
         self.response_expected[BrickletARINC429.FUNCTION_GET_IDENTITY] = BrickletARINC429.RESPONSE_EXPECTED_ALWAYS_TRUE
 
-        self.callback_formats[BrickletARINC429.CALLBACK_HEARTBEAT] = (23, 'B H 3H 3H')
-        self.callback_formats[BrickletARINC429.CALLBACK_FRAME_MESSAGE] = (19, 'B B H B I H')
-        self.callback_formats[BrickletARINC429.CALLBACK_SCHEDULER_MESSAGE] = (13, 'B B H B')
+        self.callback_formats[BrickletARINC429.CALLBACK_HEARTBEAT_MESSAGE] = (17, 'B B B H H H')
+        self.callback_formats[BrickletARINC429.CALLBACK_FRAME_MESSAGE] = (19, 'B B B H I H')
+        self.callback_formats[BrickletARINC429.CALLBACK_SCHEDULER_MESSAGE] = (13, 'B B B H')
 
         ipcon.add_device(self)
 
@@ -203,26 +188,30 @@ class BrickletARINC429(Device):
 
         return GetCapabilities(*self.ipcon.send_request(self, BrickletARINC429.FUNCTION_GET_CAPABILITIES, (), '', 18, 'H H H 2H'))
 
-    def set_heartbeat_callback_configuration(self, period, value_has_to_change):
+    def set_heartbeat_callback_configuration(self, channel, enabled, value_has_to_change, period):
         """
         Set the bricklet heartbeat which reports the statistics counters for processed frames and lost frames.
-        The period is the period with which the :cb:`Heartbeat` callback is triggered periodically. A value of 0 turns the callback off.
+        The period is the period with which the :cb:`Heartbeat Message` callback is triggered periodically. A value of 0 turns the callback off.
         When 'Value Has To Change' is enabled, the heartbeat will only be sent if there is a change in the statistics numbers.
         """
         self.check_validity()
 
-        period = int(period)
+        channel = int(channel)
+        enabled = bool(enabled)
         value_has_to_change = bool(value_has_to_change)
+        period = int(period)
 
-        self.ipcon.send_request(self, BrickletARINC429.FUNCTION_SET_HEARTBEAT_CALLBACK_CONFIGURATION, (period, value_has_to_change), 'B !', 0, '')
+        self.ipcon.send_request(self, BrickletARINC429.FUNCTION_SET_HEARTBEAT_CALLBACK_CONFIGURATION, (channel, enabled, value_has_to_change, period), 'B ! ! H', 0, '')
 
-    def get_heartbeat_callback_configuration(self):
+    def get_heartbeat_callback_configuration(self, channel):
         """
         Get the configuration of the bricklet heartbeat reporting the statistics counters.
         """
         self.check_validity()
 
-        return GetHeartbeatCallbackConfiguration(*self.ipcon.send_request(self, BrickletARINC429.FUNCTION_GET_HEARTBEAT_CALLBACK_CONFIGURATION, (), '', 10, 'B !'))
+        channel = int(channel)
+
+        return GetHeartbeatCallbackConfiguration(*self.ipcon.send_request(self, BrickletARINC429.FUNCTION_GET_HEARTBEAT_CALLBACK_CONFIGURATION, (channel,), 'B', 12, '! ! H'))
 
     def set_channel_configuration(self, channel, parity, speed):
         """
@@ -409,7 +398,7 @@ class BrickletARINC429(Device):
         Set or update an Arinc429 frame that is transmitted by the scheduler using the job types 'Single' and 'Cyclic'.
          * Channel:     selected transmit channel.
          * Frame Index: index number that will be used in the transmit scheduler job table to refer to this frame.
-         * frame:       complete Arinc429 frame including the label and SDI bits. If 'parity_auto' is set for the channel, the parity bit will be set (adjusted) automatically.
+         * Frame:       complete Arinc429 frame including the label and SDI bits. If 'parity_auto' is set for the channel, the parity bit will be set (adjusted) automatically.
         """
         self.check_validity()
 
@@ -497,6 +486,22 @@ class BrickletARINC429(Device):
         self.check_validity()
 
         self.ipcon.send_request(self, BrickletARINC429.FUNCTION_RESTART, (), '', 0, '')
+
+    def set_frame_mode(self, channel, frame_index, mode):
+        """
+        Stop / resume the transmission of a specific frame or trigger another single-transmit. This
+        function only works on frames that are sent via the TX scheduler jobs 'single' and 'cyclic'.
+         * Channel:     selected transmit channel.
+         * Frame Index: index number that will be used in the transmit scheduler job table to refer to this frame.
+         * Mode :       either 'Transmit' to transmit the frame / trigger a new single transmit, or 'Mute' to stop the transmission of the frame.
+        """
+        self.check_validity()
+
+        channel = int(channel)
+        frame_index = int(frame_index)
+        mode = int(mode)
+
+        self.ipcon.send_request(self, BrickletARINC429.FUNCTION_SET_FRAME_MODE, (channel, frame_index, mode), 'B H B', 0, '')
 
     def get_spitfp_error_count(self):
         """
@@ -654,7 +659,7 @@ class BrickletARINC429(Device):
         device identifier.
 
         The position can be 'a', 'b', 'c', 'd', 'e', 'f', 'g' or 'h' (Bricklet Port).
-        A Bricklet connected to an :ref:`Isolator Bricklet <isolator_bricklet>` is always as
+        A Bricklet connected to an :ref:`Isolator Bricklet <isolator_bricklet>` is always at
         position 'z'.
 
         The device identifier numbers can be found :ref:`here <device_identifier>`.

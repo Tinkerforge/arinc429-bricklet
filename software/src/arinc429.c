@@ -174,7 +174,7 @@ void arinc429_task_update_channel_config(void)
 				channel->job_index           = ARINC429_TX_JOBS_NUM - 1;   // the job execution starts with incrementing the index
 
 				// restart sequence number from 0 (the counter is common to all TX channels)
-				arinc429.callback.seq_number_scheduler = 0;
+				channel->common.frame_seq_number = 0;
 			}
 		}
 
@@ -238,7 +238,7 @@ void arinc429_task_update_channel_config(void)
 		    && (channel->common.callback_mode  == ARINC429_CALLBACK_OFF        ) )
 		{
 			// yes, restart sequence number from 0 (the counter is common to all RX channels)
-			arinc429.callback.seq_number_frame = 0;
+			channel->common.frame_seq_number = 0;
 		}
 
 		// reset the frame buffers if operating mode is changed (or repeated set) to 'active'
@@ -461,7 +461,7 @@ next_task:
 			}
 		}
 
-		// is it job that does not use the dwell time?
+		// is it a job that does not use the dwell time?
 		if(jobcode < ARINC429_SCHEDULER_JOB_RETURN)
 		{
 			// yes, reduce the budget for non-transmitting tasks
@@ -549,7 +549,7 @@ next_task:
 					// yes, update the frame buffer map - ineligible the frame
 					update_tx_buffer_map(i, index, ARINC429_CLEAR);
 				}
-							}
+			}
 			else
 			{
 				// no, the frame is not transmitted on this round - increment statistics counter on lost frames 
@@ -562,11 +562,11 @@ next_dwell:
 		// does the current task have a zero dwell time?
 		if(dwell_time == 0)
 		{
-			// yes, reduce budget for successive zero dwell time tasks
+			// yes, reduce the budget for successive zero dwell time tasks
 			zero_dwell_budget--;
 
 			// is there budget left over for executing another task?
-			if(zero_dwell_budget > 0)
+			if((zero_dwell_budget > 0) && (no_tx_tasks_budget > 0))
 			{
 				// yes, execute the next task right away
 				goto next_task;
@@ -782,28 +782,23 @@ void arinc429_task_check_timeout(void)
 }
 
 
-// generate bricklet heartbeat
-void generate_heartbeat_callback(void)
+void generate_heartbeat_callback_helper(ARINC429Common *common, uint8_t job)
 {
 	// is the heartbeat enabled?
-	if(arinc429.heartbeat.mode != ARINC429_CALLBACK_OFF)
+	if(common->stats_mode != ARINC429_CALLBACK_OFF)
 	{
 		// yes, is it time for the next heartbeat?
-		if(system_timer_is_time_elapsed_ms(arinc429.heartbeat.last_time, (uint32_t)arinc429.heartbeat.period))
+		if(system_timer_is_time_elapsed_ms(common->stats_last_time, (uint32_t)common->stats_period))
 		{
 			// yes, update heartbeat time
-			arinc429.heartbeat.last_time += arinc429.heartbeat.period;
+			common->stats_last_time += common->stats_period;
 
 			// shall heartbeats only be sent on changed values (i.e. 'value_has_to_change' set to 'true')?
-			if(arinc429.heartbeat.mode == ARINC429_CALLBACK_ON_CHANGE)
+			if(common->stats_mode == ARINC429_CALLBACK_ON_CHANGE)
 			{
 				// yes - check if the values have actually changed
-				if(    (arinc429.tx_channel[0].common.frames_processed_curr == arinc429.tx_channel[0].common.frames_processed_last)
-					&& (arinc429.tx_channel[0].common.frames_lost_curr      == arinc429.tx_channel[0].common.frames_lost_last     )
-					&& (arinc429.rx_channel[0].common.frames_processed_curr == arinc429.rx_channel[0].common.frames_processed_last)
-					&& (arinc429.rx_channel[0].common.frames_lost_curr      == arinc429.rx_channel[0].common.frames_lost_last     )
-					&& (arinc429.rx_channel[1].common.frames_processed_curr == arinc429.rx_channel[1].common.frames_processed_last)
-					&& (arinc429.rx_channel[1].common.frames_lost_curr      == arinc429.rx_channel[1].common.frames_lost_last     ) )
+				if(    (common->frames_processed_curr == common->frames_processed_last)
+					&& (common->frames_lost_curr      == common->frames_lost_last     ) )
 				{
 					// no change, done
 					return;
@@ -811,21 +806,45 @@ void generate_heartbeat_callback(void)
 				else
 				{
 					// yes, update last statistics counters with the current values
-					arinc429.tx_channel[0].common.frames_processed_last = arinc429.tx_channel[0].common.frames_processed_curr;
-					arinc429.tx_channel[0].common.frames_lost_last      = arinc429.tx_channel[0].common.frames_lost_curr;
-					arinc429.rx_channel[0].common.frames_processed_last = arinc429.rx_channel[0].common.frames_processed_curr;
-					arinc429.rx_channel[0].common.frames_lost_last      = arinc429.rx_channel[0].common.frames_lost_curr;
-					arinc429.rx_channel[1].common.frames_processed_last = arinc429.rx_channel[1].common.frames_processed_curr;
-					arinc429.rx_channel[1].common.frames_lost_last      = arinc429.rx_channel[1].common.frames_lost_curr;
+					common->frames_processed_last = common->frames_processed_curr;
+					common->frames_lost_last      = common->frames_lost_curr;
 				}
 			}
 
 			// get the current time, chopped to 16 bit
 			uint16_t  curr_time = (uint16_t)(system_timer_get_ms() & 0x0000FFFF);
 
-			// enqueue a heartbeat callback message (the buffer argument is not used with heartbeats)
-			enqueue_message(ARINC429_CALLBACK_JOB_HEARTBEAT, curr_time, 0);
+			// enqueue a statistics callback message (the buffer argument is not used)
+			enqueue_message(job, curr_time, 0);
 		}
+	}
+
+	// done
+	return;
+}
+
+
+// generate bricklet heartbeat
+void generate_heartbeat_callback(void)
+{
+	// do all TX channels
+	for(uint8_t i = 0; i < ARINC429_TX_CHANNELS_NUM; i++)
+	{
+		// get a pointer to the common part of the TX channel
+		ARINC429Common *common = &(arinc429.tx_channel[i].common);
+
+		// generate the callback
+		generate_heartbeat_callback_helper(common, ARINC429_CALLBACK_JOB_STATS_TX1 + i);
+	}
+
+	// do all RX channels
+	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
+	{
+		// get a pointer to the common part of the RX channel
+		ARINC429Common *common = &(arinc429.rx_channel[i].common);
+
+		// generate the callback
+		generate_heartbeat_callback_helper(common, ARINC429_CALLBACK_JOB_STATS_RX1 + i);
 	}
 
 	// done
@@ -873,125 +892,27 @@ void arinc429_init_data(void)
 		// get a pointer to the channel
 		ARINC429TXChannel *channel = &(arinc429.tx_channel[i]);
 
-		// operating modes
-		channel->common.parity_speed          = (ARINC429_PARITY_AUTO << 4) | (ARINC429_SPEED_LS << 0);
-		channel->common.operating_mode        = ARINC429_CHANNEL_MODE_PASSIVE;
-		channel->common.callback_mode         = ARINC429_CALLBACK_OFF;
-
-		// requests
-		channel->common.change_request        = 0xFF;  // request update of everything
-
-		// statistics
-		channel->common.frames_processed_curr = 0;
-		channel->common.frames_processed_last = 0;
-		channel->common.frames_lost_curr      = 0;
-		channel->common.frames_lost_last      = 0;
-
-		// immediate transmit queue
-		channel->head                         = 0;
-		channel->tail                         = 0;
-
-		// immediate transmit frame buffers
-		for(uint8_t j = 0; j < ARINC429_TX_QUEUE_SIZE; j++)
-		{
-			channel->queue[j]                 = 0;
-		}
-
-		// scheduled transmit
-		channel->last_job_exec_time           = 0;
-		channel->last_job_dwell_time          = 0;
-		channel->scheduler_jobs_used          = 0;
-		channel->job_index                    = ARINC429_TX_JOBS_NUM - 1;   // the job execution starts with incrementing the index
-		channel->job_index_jump               = 0;
-
-		// scheduler task table
-		for(uint16_t j = 0; j < ARINC429_TX_JOBS_NUM; j++)
-		{
-			channel->job_frame[j]             = ARINC429_SCHEDULER_JOB_SKIP << ARINC429_TX_JOB_JOBCODE_POS;
-			channel->dwell_time[j]            = 0;
-		}
-
-		// scheduler frame table
-		for(uint16_t j = 0; j < ARINC429_TX_BUFFER_NUM; j++)
-		{
-			channel->frame_buffer[j]          = 0;
-		}
-		
-		// scheduler frame transmit eligible map
-		for(uint16_t j = 0; j < 8; j++)
-		{
-			channel->frame_buffer_map[j]      = 0;
-		}
+		// set vars that need to be != 0
+		channel->common.parity_speed   = (ARINC429_PARITY_AUTO << 4) | (ARINC429_SPEED_LS << 0);
+		channel->common.change_request = 0xFF;                        // request update of everything
+		channel->job_index             = ARINC429_TX_JOBS_NUM - 1;    // the job execution starts with incrementing the index
 	}
 
-	// initialize all RX channels
+	// initialize all RX channels (set vars that need to be != 0)
 	for(uint8_t i = 0; i < ARINC429_RX_CHANNELS_NUM; i++)
 	{
 		// get a pointer to the channel
 		ARINC429RXChannel *channel = &(arinc429.rx_channel[i]);
 
-		// operating modes
-		channel->common.parity_speed          = (ARINC429_PARITY_AUTO << 4) | (ARINC429_SPEED_LS << 0);
-		channel->common.operating_mode        = ARINC429_CHANNEL_MODE_PASSIVE;
-		channel->common.callback_mode         = ARINC429_CALLBACK_OFF;
-
-		// requests
-		channel->common.change_request        = 0xFF;  // request update of everything
-
-		// statistics
-		channel->common.frames_processed_curr = 0;
-		channel->common.frames_processed_last = 0;
-		channel->common.frames_lost_curr      = 0;
-		channel->common.frames_lost_last      = 0;
-
-		// timeout check
-		channel->timeout_period               = 1000;
-
-		// hardware frame filters
-		for(uint8_t j = 0; j < 32; j++)
-		{
-			channel->hardware_filter[j]       = 0;
-		}
-
-		// software frame filters
-		for(uint8_t  j = 0; j < 32; j++)
-		{
-			channel->frame_filter_map[j]      = 0;
-		}
-
-		for(uint16_t j = 0; j < ARINC429_RX_FILTERS_NUM; j++)
-		{
-			channel->frame_filter[j]          = 0;
-		}
-
-		// frame buffers
-		channel->frame_buffers_used           = 0;
+		// set vars that need to be != 0
+		channel->common.parity_speed   = (ARINC429_PARITY_AUTO << 4) | (ARINC429_SPEED_LS << 0);
+		channel->common.change_request = 0xFF;                        // request update of everything
+		channel->timeout_period        = 1000;                        // frame timeout check
 
 		for(uint16_t j = 0; j < ARINC429_RX_BUFFER_NUM; j++)
 		{
-			channel->frame_buffer[j].frame         = 0;
-			channel->frame_buffer[j].frame_age     = ARINC429_RX_BUFFER_UNUSED;
-			channel->frame_buffer[j].last_rx_time  = 0;
+			channel->frame_buffer[j].frame_age = ARINC429_RX_BUFFER_UNUSED;
 		}
-	}
-
-	// heartbeat callback
-	arinc429.heartbeat.last_time              = 0;
-	arinc429.heartbeat.period                 = 0;
-	arinc429.heartbeat.mode                   = ARINC429_CALLBACK_OFF;
-	arinc429.heartbeat.seq_number             = 0;
-
-	// callback queue
-	arinc429.callback.head                    = 0;
-	arinc429.callback.tail                    = 0;
-	arinc429.callback.seq_number_frame        = 0;
-	arinc429.callback.seq_number_scheduler    = 0;
-
-	// callback queue buffers
-	for(uint16_t i = 0; i < ARINC429_CB_QUEUE_SIZE; i++)
-	{
-		arinc429.callback.queue[i].message    = ARINC429_CALLBACK_JOB_NONE;
-		arinc429.callback.queue[i].buffer     = 0;
 	}
 
 	// done
@@ -1038,7 +959,7 @@ void arinc429_tick_task(void)
 			hi3593_tick();
 		}
 
-		// generate the heartbeat
+		// generate the heartbeats (statistics callbacks)
 		generate_heartbeat_callback();
 
 		// done for now
