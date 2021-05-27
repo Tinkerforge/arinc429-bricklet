@@ -30,7 +30,7 @@ def frame_cb(channel, status, seq_number, timestamp, frame, age) :
 
 
 # callback function for the scheduler message
-def scheduler_cb(userdata, status, seq_number, timestamp) :
+def scheduler_cb(channel, status, seq_number, timestamp, userdata) :
 
     print('Scheduler #', seq_number, ' userdata =', userdata, ' timestamp =', timestamp)  
 

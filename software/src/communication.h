@@ -451,10 +451,11 @@ typedef struct {
 // scheduler message callback
 typedef struct {
 	TFPMessageHeader  header;                 // message header
-	uint8_t           userdata;               // user data from scheduler callback job
+	uint8_t           channel;                // channel on which the callback was generated
 	uint8_t           status;                 // reason for the callback: ARINC429_STATUS_SCHEDULER
 	uint8_t           seq_number;             // sequence number of the rx callback message
 	uint16_t          timestamp;              // time of message creation
+	uint8_t           userdata;               // user data from scheduler callback job
 } __attribute__((__packed__)) Scheduler_Callback;
 
 

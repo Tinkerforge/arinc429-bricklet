@@ -1470,10 +1470,11 @@ bool handle_callbacks(void)
 			tfp_make_default_header(&cb_scheduler.header, bootloader_get_uid(), sizeof(Scheduler_Callback), FID_CALLBACK_SCHEDULER_MESSAGE);
 
 			// collect the callback message data
-			cb_scheduler.userdata     = buffer;
+			cb_scheduler.channel      = ARINC429_CHANNEL_TX1;
 			cb_scheduler.timestamp    = timestamp;
 			cb_heartbeat.status       = ARINC429_STATUS_SCHEDULER;
 			cb_scheduler.seq_number   = arinc429.tx_channel[0].common.frame_seq_number;
+			cb_scheduler.userdata     = buffer;
 
 			// increment the sequence number, thereby skipping the value 0
 			if(++arinc429.tx_channel[0].common.frame_seq_number == 0)  arinc429.tx_channel[0].common.frame_seq_number = 1;
