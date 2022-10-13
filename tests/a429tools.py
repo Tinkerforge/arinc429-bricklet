@@ -13,57 +13,57 @@
 # constants - !!! keep in line with the A429 Bricklet API !!!
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-FRAME_FORMAT_BCD      = 1
-FRAME_FORMAT_BNR      = 2
-FRAME_FORMAT_DISCRETE = 3
+FRAME_FORMAT_BCD          =  1  # A429 encoding schema 'BCD'
+FRAME_FORMAT_BNR          =  2  # A429 encoding schema 'BNR'
+FRAME_FORMAT_DISCRETE     =  3  # A429 encoding schema 'discrete'
 
-SSM_DATA  = 0
-SSM_NO    = 1
-SSM_NCD   = 2
-SSM_FW    = 3
-SSM_FT    = 4
-SSM_PLUS  = 5
-SSM_MINUS = 6
+SSM_DATA                  =  0  # SSM is used for data
+SSM_NO                    =  1  # normal operation
+SSM_NCD                   =  2  # no computed data
+SSM_FW                    =  3  # failure warning
+SSM_FT                    =  4  # functional test
+SSM_PLUS                  =  5  # normal operation, positive value
+SSM_MINUS                 =  6  # normal operation, negative value
 
-SDI_SDI0 = 0
-SDI_SDI1 = 1
-SDI_SDI2 = 2
-SDI_SDI3 = 3
-SDI_DATA = 4
+SDI_SDI0                  =  0  # SDI 0
+SDI_SDI1                  =  1  # SDI 1
+SDI_SDI2                  =  2  # SDI 2
+SDI_SDI3                  =  3  # SDI 3
+SDI_DATA                  =  4  # SDI bits are used to hold a part of the value data
 
-CHANNEL_TX  = 0
-CHANNEL_TX1 = 1
-CHANNEL_RX  = 32
-CHANNEL_RX1 = 33
-CHANNEL_RX2 = 34
+CHANNEL_TX                =  0  # all TX channels
+CHANNEL_TX1               =  1  # TX channel 1
+CHANNEL_RX                = 32  # all RX channels
+CHANNEL_RX1               = 33  # RX channel 1
+CHANNEL_RX2               = 34  # RX channel 2
 
-PARITY_DATA = 0
-PARITY_AUTO = 1
+PARITY_DATA               =  0  # the parity bit is used to hold a part of the value data
+PARITY_AUTO               =  1  # the parity bit is used for parity, parity is managed by the A429 bricklet automatically
 
-SPEED_HS = 0
-SPEED_LS = 1
+SPEED_HS                  =  0  # A429 high bus speed
+SPEED_LS                  =  1  # A429 low  bus speed
 
-CHANNEL_MODE_PASSIVE = 0
-CHANNEL_MODE_ACTIVE = 1
-CHANNEL_MODE_RUN = 2
+CHANNEL_MODE_PASSIVE      =  0  # channel is inactive (TX: high-Z)
+CHANNEL_MODE_ACTIVE       =  1  # channel is active
+CHANNEL_MODE_RUN          =  2  # TX only: TX scheduler is running
 
-FRAME_STATUS_NEW = 0
-FRAME_STATUS_UPDATE = 1
-FRAME_STATUS_TIMEOUT = 2
+FRAME_STATUS_NEW          =  0  # initial reception or 1st reception after a timeout
+FRAME_STATUS_UPDATE       =  1  # successive reception with a new value
+FRAME_STATUS_TIMEOUT      =  2  # no reception any more
 
-SCHEDULER_JOB_SKIP = 0
-SCHEDULER_JOB_CALLBACK = 1
-SCHEDULER_JOB_STOP = 2
-SCHEDULER_JOB_JUMP = 3
-SCHEDULER_JOB_RETURN = 4
-SCHEDULER_JOB_DWELL = 5
-SCHEDULER_JOB_SINGLE = 6
-SCHEDULER_JOB_CYCLIC = 7
-SCHEDULER_JOB_RETRANS_RX1 = 8
-SCHEDULER_JOB_RETRANS_RX2 = 9
+SCHEDULER_JOB_SKIP        =  0  # do nothing
+SCHEDULER_JOB_CALLBACK    =  1  # send a scheduler callback
+SCHEDULER_JOB_STOP        =  2  # stop the scheduler (channel mode changes to CHANNEL_MODE_ACTIVE)
+SCHEDULER_JOB_JUMP        =  3  # continue the schedule at the given index
+SCHEDULER_JOB_RETURN      =  4  # resume   the schedule at the index position of the last JUMP + 1
+SCHEDULER_JOB_DWELL       =  5  # wait for the given time (in milliseconds)
+SCHEDULER_JOB_SINGLE      =  6  # transmit the referenced frame a single time (can be         re-enabled via                TX_MODE_TRANSMIT)
+SCHEDULER_JOB_CYCLIC      =  7  # transmit the referenced frame in each cycle (can be muted / re-enabled via TX_MODE_MUTE / TX_MODE_TRANSMIT)
+SCHEDULER_JOB_RETRANS_RX1 =  8  # transmit the referenced frame as received on RX 1 in each cycle
+SCHEDULER_JOB_RETRANS_RX2 =  9  # transmit the referenced frame as received on RX 2 in each cycle
 
-TX_MODE_TRANSMIT = 0
-TX_MODE_MUTE     = 1
+TX_MODE_TRANSMIT          =  0  # re-enable transmission (trigger another single transmit)
+TX_MODE_MUTE              =  1  # stop the  transmission
 
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -78,9 +78,10 @@ def binary2bcd(binary) :
     the number in BCD coding. The BCD encoded number will have as many bits / BCD digits
     as are needed to represent the binary number.
     """
-    # init the internal vars
-    bcd    = 0
-    shift  = 0
+
+    # initialize the internal vars
+    bcd   = 0
+    shift = 0
 
     # convert from binary to BCD, working through the 10th, 100th, ...
     while (binary) :
@@ -99,7 +100,8 @@ def bcd2binary(bcd) :
     in plain binary encoding. The binary encoded number will have as many bits as are
     needed to represent the VCD number.
     """
-    # init the internal vars
+
+    # initialize the internal vars
     binary = 0
     factor = 1
 
@@ -128,11 +130,9 @@ def scalefactor(size, eng_min, eng_max) :
     encoded_value     = round(engineering_value / scalefactor())
     engineering_value = encoded_value * scalefactor()
     """
-    # don't scale if the size argument has an illegal value
-    if (size < 1) : return 1
 
-    # make sure the size is an integer
-    size = int(size)
+    # don't scale if the size argument is not an integer or otherwise illegal
+    if not isinstance(size, int) or (size < 1) : return 1
 
     # the scaling assumes that the biggest engineering value is encoded
     # by the number 2^size, although in practice the biggest value that
@@ -151,14 +151,15 @@ def mirror(num, size) :
 
     mirror(0b11000101, 8) yields 0b10100011
     """
-    # init the result var
-    result = 0
 
-    # abort if the size argument has an illegal value
-    if (size < 1) : return 1
+    # initialize the result var
+    result = 0
 
     # make sure the size is an integer
     size = int(size)
+
+    # abort if the size argument has an illegal value
+    if (size < 1) : return 1
 
     # shift the bits of num out to the right and into result to the left
     for i in range(size):
@@ -176,11 +177,12 @@ def twos_complement(value, size) :
     Delivers the 2's complement of the given value,
     assuming the number is sized 'size' bits.
     """
-    # abort if the size argument has an illegal value
-    if (size < 1) : return 1
 
     # make sure the size is an integer
     size = int(size)
+
+    # abort if the size argument has an illegal value
+    if (size < 1) : return 1
 
     return (2**size) - int(value)
 
@@ -195,10 +197,12 @@ def parity2text(parity) :
 
     converts a parity enum value into a human-readable string
     """
-    if (parity == PARITY_DATA) : return 'data'
-    if (parity == PARITY_AUTO) : return 'auto'
 
-    return 'error - undefined parity encoding'
+    switcher = {PARITY_DATA : 'data',
+                PARITY_AUTO : 'auto',
+               }
+
+    return switcher.get(parity, 'error - undefined parity encoding')
 
 
 def speed2text(speed) :
@@ -207,10 +211,12 @@ def speed2text(speed) :
 
     converts a speed enum value into a human-readable string
     """
-    if (speed == SPEED_HS) : return 'high speed'
-    if (speed == SPEED_LS) : return 'low speed'
 
-    return 'error - undefined speed encoding'
+    switcher = {SPEED_HS : 'high speed',
+                SPEED_LS :  'low speed',
+               }
+
+    return switcher.get(speed, 'error - undefined speed encoding')
 
 
 def ssm2long_text(ssm) :
@@ -219,12 +225,15 @@ def ssm2long_text(ssm) :
 
     converts a SSM enum value into a human-readable string
     """
-    if   (ssm == SSM_DATA) : return 'SSM used for data'
-    elif (ssm == SSM_NO  ) : return  'NO (normal operation)'
-    elif (ssm == SSM_NCD ) : return 'NCD (no computed data)'
-    elif (ssm == SSM_FW  ) : return  'FW (failure warning)'
-    elif (ssm == SSM_FT  ) : return  'FT (functional test)'
-    else                   : return  'error - undefined SSM encoding'
+
+    switcher = {SSM_DATA : 'SSM used for data',
+                SSM_NO   :  'NO (normal operation)',
+                SSM_NCD  : 'NCD (no computed data)',
+                SSM_FW   :  'FW (failure warning)',
+                SSM_FT   :  'FT (functional test)',
+               }
+
+    return switcher.get(speed, 'error - undefined SSM encoding')
 
 
 def ssm2text(ssm) :
@@ -234,12 +243,25 @@ def ssm2text(ssm) :
 
     converts a SSM enum value into a human-readable string
     """
+
+    switcher = {SSM_DATA : 'data',
+                SSM_NO   : 'NO',
+                SSM_NCD  : 'NCD',
+                SSM_FW   : 'FW',
+                SSM_FT   : 'FT',
+               }
+
+    return switcher.get(speed, 'error - undefined SSM encoding')
+
+
     if   (ssm == SSM_DATA) : return 'data'
     elif (ssm == SSM_NO  ) : return 'NO'
     elif (ssm == SSM_NCD ) : return 'NCD'
     elif (ssm == SSM_FW  ) : return 'FW'
     elif (ssm == SSM_FT  ) : return 'FT'
     else                   : return 'error'
+
+
 
 # ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 # high level functions
@@ -263,12 +285,13 @@ def createFrame(label, sdi) :
 
     If the label or sdi argument are illegal, a value of -1 will be delivered.
     """
-    # check the arguments
-    if ((label > 255) or (label < 0) or (sdi > 4) or (sdi < 0)) : return -1
 
     # make sure the label and the SDI are integers
     label = int(label)
     sdi   = int(sdi)
+
+    # check the arguments
+    if ((label > 255) or (label < 0) or (sdi > 4) or (sdi < 0)) : return -1
 
     # assemble the raw frame
     if (sdi == SDI_DATA) : return (label)
@@ -283,6 +306,7 @@ def readLabel(frame) :
     the label needs to have it's LSB aligned with the LSB of the frame,
     as delivered by the TinkerForge Arinc429 Bricklet.
     """
+
     # extract the lowest 8 bits
     return frame & 0x000000FF
 
@@ -295,6 +319,7 @@ def readExtendedLabel(frame) :
     binary format. Actually, it returns the lowest 10 bits of the provided
     frame.
     """
+
     # extract the lowest 10 bits
     return frame & 0x000003FF
 
@@ -305,6 +330,7 @@ def readSDI(frame) :
 
     Delivers the value of the SDI in binary format.
     """
+
     # extract bits 8..9
     return (frame & 0x00000300) >> 8
 
@@ -315,6 +341,8 @@ def readLabelSDI(frame) :
 
     Delivers the values of the label and the SDI as a tupel in binary format.
     """
+
+    # extract the lowest 8 bits and bits 8..9 separately
     return frame & 0x000000FF, (frame & 0x00000300) >> 8
 
 
@@ -324,6 +352,7 @@ def readRawSSM(frame) :
 
     Delivers the value of the SSM in raw binary format.
     """
+
     # extract bits 29..30
     return (frame & 0x60000000) >> 29
 
@@ -404,7 +433,7 @@ def setValue(frame, a429_frame_format, lsb_position, size, \
 
         # process negative values
         if (engineering_value < 0) :
-            sign = -1
+            sign               = -1
             engineering_value *= -1
 
         # convert the engineering value into BCD encoding
@@ -422,7 +451,7 @@ def setValue(frame, a429_frame_format, lsb_position, size, \
 
         # process negative values
         if (engineering_value < 0) :
-            sign = -1
+            sign               = -1
             engineering_value *= -1
 
         # scale the engineering value
@@ -449,11 +478,11 @@ def setValue(frame, a429_frame_format, lsb_position, size, \
 
     elif (a429_frame_format == FRAME_FORMAT_DISCRETE) :
 
-        # abort if the engineering value is negative
-        if (engineering_value < 0) : return -1
-
         # make sure the engineering value is an integer
         engineering_value = int(engineering_value)
+
+        # abort if the engineering value is negative
+        if (engineering_value < 0) : return -1
 
         # in DISCRETE format, the engineering value goes straight into the A429 frame
         data_value = engineering_value
@@ -554,7 +583,7 @@ def getValue(frame, a429_frame_format, lsb_position, size, \
         elif (data_ssm == 1) : ssm_value = SSM_NCD
         elif (data_ssm == 2) : ssm_value = SSM_FT
         elif (data_ssm == 3) :
-            ssm_value = SSM_NO
+            ssm_value          = SSM_NO
             engineering_value *= -1
 
 
@@ -562,7 +591,7 @@ def getValue(frame, a429_frame_format, lsb_position, size, \
 
         # in case of a negative value, convert the data value to 2's complement
         if (frame & (1 << 28)) :
-            sign  = -1
+            sign       = -1
             data_value = twos_complement(data_value, size)
 
         # un-scale the data value to get the engineering value

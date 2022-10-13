@@ -67,7 +67,7 @@
 #define ARINC429_TX_ZERO_DWELL_BUDGET    4                  // number of successive zero dwell time jobs done in one tick ## fudge factor for performance tuning (good value:  4)
 
 // callback queue
-#define ARINC429_CB_QUEUE_SIZE           300                // number of entries in the callback queue                    ## customizable, max 2^16 ##
+#define ARINC429_CB_QUEUE_SIZE           128                // number of entries in the callback queue                    ## customizable, max 2^16, use multiple of 4 for memory alignment ##
 
 // immediate transmit queue
 #define ARINC429_TX_QUEUE_SIZE           16                 // number of entries in the immediate transmit queue          ## customizable, max 2^8  ##
@@ -96,21 +96,14 @@
 // callback queue
 typedef struct
 {
-	uint8_t          message;                               //     1 message type and channel id
-	uint8_t          buffer;                                //     1 pointer to frame buffer or task index
-	uint16_t         timestamp;                             //     2 message creation time
-}                                                           //  ====
-PACKED ARINC429CBQueue;                                     //     4 byte
-
-
-// callback
-typedef struct
-{
-	uint16_t         head;                                  //     2 message queue head index
-	uint16_t         tail;                                  //     2 message queue tail index
-	ARINC429CBQueue  queue[ARINC429_CB_QUEUE_SIZE];         // 1.200 message queue (ring buffer)
+	uint16_t         head;                                  //     2 message   queue head index
+	uint16_t         tail;                                  //     2 message   queue tail index
+	uint8_t          message  [ARINC429_CB_QUEUE_SIZE];     //   128 message type and channel id (ring buffer)
+	uint16_t         timestamp[ARINC429_CB_QUEUE_SIZE];     //   256 message creation time       (ring buffer)
+	uint32_t         frame    [ARINC429_CB_QUEUE_SIZE];     //   512 frame                       (ring buffer)
+	uint16_t         age_token[ARINC429_CB_QUEUE_SIZE];     //   256 frame age [ms] or token     (ring buffer)
 }                                                           // =====
-PACKED ARINC429Callback;                                    // 1.204 byte
+PACKED ARINC429Callback;                                    // 1.156 byte
 
 
 // common config and status data for all channel types
@@ -221,13 +214,13 @@ typedef struct
 	ARINC429RXChannel rx_channel[ARINC429_RX_CHANNELS_NUM]; //  6.520 RX channels
 
 	// callback queue
-	ARINC429Callback  callback;                             //  1.204 callback queue
+	ARINC429Callback  callback;                             //  1.156 callback queue
 
 	// system - Attention: needs to be placed at the end
 	//                     of the ARINC429 data structure!
 	ARINC429System    system;                               //      4 system settings
 }                                                           // ======
-PACKED ARINC429;                                            // 11.892 byte (~11.6 kByte)
+PACKED ARINC429;                                            // 11.844 byte (11.6 kByte)
 
 
 /****************************************************************************/

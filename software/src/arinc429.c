@@ -451,10 +451,9 @@ next_task:
 		{
 			// yes, prepare scheduler message
 			uint16_t curr_time = (uint16_t)(system_timer_get_ms() & 0x0000FFFF);
-			uint8_t  token     = (uint8_t )(index                 &     0x00FF);
 
-			// enqueue scheduler message, success?
-			if(!enqueue_message(ARINC429_CALLBACK_JOB_SCHEDULER_CB, curr_time, token))
+			// enqueue scheduler message (the user data will be stored in the age_token field), success?
+			if(!enqueue_message(ARINC429_CALLBACK_JOB_SCHEDULER_CB, curr_time, 0, index))
 			{
 				// no, increment counter on lost frames
 				channel->common.frames_lost_curr++;
@@ -593,13 +592,14 @@ void arinc429_task_receive_frames(void)
 	const uint8_t disc_new_frame [ARINC429_RX_CHANNELS_NUM] = {HI3593_R1FLAG_INDEX,      HI3593_R2FLAG_INDEX     };
 
 	uint32_t  new_frame;     // buffer for received frame
+	uint16_t  new_age;       // computed age of the received frame
 	uint16_t  curr_time;     // cache  for current time
 	uint8_t   data[4];       // transfer buffer for hi3593_read_register()
 	uint8_t   frame[4];      // frame broken down into individual bytes
 	uint8_t   frame_budget;  // max number of frames read per channel within one invocation
 	uint16_t  ext_label;     // extended label code (label + SDI)
 	uint8_t   buffer_index;  // index of the frame buffer
-	uint16_t  age;           // computed age of the received frame
+	uint8_t   message;       // callback message type
 
 
 	// get the current time, chopped to 16 bit
@@ -669,16 +669,22 @@ void arinc429_task_receive_frames(void)
 				// 1st frame ever or after a timeout?
 				if(buffer->frame_age <= ARINC429_RX_BUFFER_NEW)
 				{
-					// no, compute the age of the frame
-					age = curr_time - buffer->last_rx_time;
+					// no, frame update
+					message = ARINC429_CALLBACK_JOB_FRAME_RX1 + i;
+
+					//compute the age of the frame
+					new_age = curr_time - buffer->last_rx_time;
 
 					// limit the age to 60 sec = 60000 ms
-					if(age > 60000)  age = 60000;
+					if(new_age > 60000)  new_age = 60000;
 				}
 				else
 				{
-					// yes, memorize its the 1st frame ever or after timeout
-					age = ARINC429_RX_BUFFER_NEW;
+					// yes, 1st frame ever or after timeout
+					message = ARINC429_CALLBACK_JOB_NEW_RX1 + i;
+
+					// set the age to the respective constant
+					new_age = ARINC429_RX_BUFFER_NEW;
 				}
 
 				// shall send a callback?
@@ -686,7 +692,7 @@ void arinc429_task_receive_frames(void)
 				    || ((channel->common.callback_mode == ARINC429_CALLBACK_ON_CHANGE) && ((buffer->frame != new_frame) || (buffer->frame_age > ARINC429_RX_BUFFER_NEW))) )
 				{
 					// yes, enqueue a new frame message, success?
-					if(!enqueue_message(ARINC429_CALLBACK_JOB_FRAME_RX1 + i, curr_time, buffer_index))
+					if(!enqueue_message(message, curr_time, new_frame, new_age))
 					{
 						// no, increment counter on lost frames
 						channel->common.frames_lost_curr++;
@@ -695,7 +701,7 @@ void arinc429_task_receive_frames(void)
 
 				// store the frame, its age and its receive time
 				buffer->frame        = new_frame;
-				buffer->frame_age    = age;
+				buffer->frame_age    = new_age;
 				buffer->last_rx_time = curr_time;
 
 				// increment the statistics counter
@@ -767,7 +773,7 @@ void arinc429_task_check_timeout(void)
 				if(channel->common.callback_mode != ARINC429_CALLBACK_OFF)
 				{
 					// yes, enqueue a timeout message, success?
-					if(!enqueue_message(ARINC429_CALLBACK_JOB_TIMEOUT_RX1 + channel_index, curr_time, buffer_index))
+					if(!enqueue_message(ARINC429_CALLBACK_JOB_TIMEOUT_RX1 + channel_index, curr_time, buffer->frame, channel->timeout_period))
 					{
 						// no, increment counter on lost frames
 						channel->common.frames_lost_curr++;
@@ -814,8 +820,8 @@ void generate_heartbeat_callback_helper(ARINC429Common *common, uint8_t job)
 			// get the current time, chopped to 16 bit
 			uint16_t  curr_time = (uint16_t)(system_timer_get_ms() & 0x0000FFFF);
 
-			// enqueue a statistics callback message (the buffer argument is not used)
-			enqueue_message(job, curr_time, 0);
+			// enqueue a statistics callback message (the frame and age arguments are not used)
+			enqueue_message(job, curr_time, 0, 0);
 		}
 	}
 

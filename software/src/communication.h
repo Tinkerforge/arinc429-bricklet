@@ -111,11 +111,13 @@ void communication_init(void);
 #define ARINC429_CALLBACK_JOB_STATS_TX1    1  // callback job code for a TX statistics event
 #define ARINC429_CALLBACK_JOB_STATS_RX1    2  // callback job code for a RX statistics event, bit 0 = 0 -> RX channel 1
 #define ARINC429_CALLBACK_JOB_STATS_RX2    3  // callback job code for a RX statistics event, bit 0 = 1 -> RX channel 2
-#define ARINC429_CALLBACK_JOB_FRAME_RX1    4  // callback job code for a RX new frame  event, bit 0 = 0 -> RX channel 1
-#define ARINC429_CALLBACK_JOB_FRAME_RX2    5  // callback job code for a RX new frame  event, bit 0 = 1 -> RX channel 2
-#define ARINC429_CALLBACK_JOB_TIMEOUT_RX1  6  // callback job code for a RX timeout    event, bit 0 = 0 -> RX channel 1
-#define ARINC429_CALLBACK_JOB_TIMEOUT_RX2  7  // callback job code for a RX timeout    event, bit 0 = 1 -> RX channel 2
-#define ARINC429_CALLBACK_JOB_SCHEDULER_CB 8  // callback job code for a TX scheduler  event
+#define ARINC429_CALLBACK_JOB_NEW_RX1      4  // callback job code for a RX new frame  event, bit 0 = 0 -> RX channel 1
+#define ARINC429_CALLBACK_JOB_NEW_RX2      5  // callback job code for a RX new frame  event, bit 0 = 1 -> RX channel 2
+#define ARINC429_CALLBACK_JOB_FRAME_RX1    6  // callback job code for a RX new frame  event, bit 0 = 0 -> RX channel 1
+#define ARINC429_CALLBACK_JOB_FRAME_RX2    7  // callback job code for a RX new frame  event, bit 0 = 1 -> RX channel 2
+#define ARINC429_CALLBACK_JOB_TIMEOUT_RX1  8  // callback job code for a RX timeout    event, bit 0 = 0 -> RX channel 1
+#define ARINC429_CALLBACK_JOB_TIMEOUT_RX2  9  // callback job code for a RX timeout    event, bit 0 = 1 -> RX channel 2
+#define ARINC429_CALLBACK_JOB_SCHEDULER_CB 10 // callback job code for a TX scheduler  event
 
 #define ARINC429_CALLBACK_OFF              0  // callback disabled
 #define ARINC429_CALLBACK_ON               1  // callback enabled
@@ -466,7 +468,7 @@ typedef struct {
 /*** function prototypes - internal functions ***/
 
 bool check_sw_filter_map(uint8_t channel_index, uint16_t ext_label);
-bool enqueue_message    (uint8_t message_type,  uint16_t timestamp, uint8_t buffer);
+bool enqueue_message    (uint8_t message_type,  uint16_t timestamp, uint32_t frame, uint16_t age_token);
 
 
 /*** function prototypes - API ***/

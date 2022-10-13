@@ -13,7 +13,7 @@ import time
 
 
 #######################################################################################
-# For this test connect TX with RX1 and RX2 (i.e. all 'A' together, all 'B' together) #
+# For this test connect TX with RX1 (i.e. both 'A' together, both 'B' together)       #
 #######################################################################################
 
 
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     a429.register_callback(a429.CALLBACK_HEARTBEAT_MESSAGE, heartbeat_cb)
     
     # configure callback
-    a429.set_heartbeat_callback_configuration(channel = a429.CHANNEL_RX, enabled = True, value_has_to_change = False, period = 1000)
+    a429.set_heartbeat_callback_configuration(channel = a429.CHANNEL_RX1, enabled = True, value_has_to_change = False, period = 1000)
 
     print('heartbeat configured')
 

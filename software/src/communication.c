@@ -1311,7 +1311,7 @@ BootloaderHandleMessageResponse restart(const Restart *data)
 /****************************************************************************/
 
 // enqueue a callback message
-bool enqueue_message(uint8_t message, uint16_t timestamp, uint8_t buffer)
+bool enqueue_message(uint8_t message, uint16_t timestamp, uint32_t frame, uint16_t age_token)
 {
 	// get the current head position in the callback queue
 	uint16_t next_head = arinc429.callback.head;
@@ -1323,9 +1323,10 @@ bool enqueue_message(uint8_t message, uint16_t timestamp, uint8_t buffer)
 	if(next_head == arinc429.callback.tail)  return false;
 
 	// enqueue the message
-	arinc429.callback.queue[next_head].message   = message;
-	arinc429.callback.queue[next_head].timestamp = timestamp;
-	arinc429.callback.queue[next_head].buffer    = buffer;
+	arinc429.callback.message  [next_head] = message;
+	arinc429.callback.timestamp[next_head] = timestamp;
+	arinc429.callback.frame    [next_head] = frame;
+	arinc429.callback.age_token[next_head] = age_token;
 
 	// update the head position
 	arinc429.callback.head = next_head;
@@ -1341,6 +1342,7 @@ bool handle_callbacks(void)
 	static Heartbeat_Callback  cb_heartbeat;
 	static Frame_Callback      cb_frame;
 	static Scheduler_Callback  cb_scheduler;
+	       uint8_t            *seq_number;
 
 	// done if there is no pending message request in the queue
 	if(arinc429.callback.tail == arinc429.callback.head)           return false;
@@ -1355,9 +1357,10 @@ bool handle_callbacks(void)
 	if(++next_tail >= ARINC429_CB_QUEUE_SIZE) next_tail = 0;
 
 	// get the message data
-	uint8_t  message   = arinc429.callback.queue[next_tail].message;
-	uint8_t  buffer    = arinc429.callback.queue[next_tail].buffer;
-	uint16_t timestamp = arinc429.callback.queue[next_tail].timestamp;
+	uint8_t  message   = arinc429.callback.message  [next_tail];
+	uint16_t timestamp = arinc429.callback.timestamp[next_tail];
+	uint32_t frame     = arinc429.callback.frame    [next_tail];
+	uint16_t age_token = arinc429.callback.age_token[next_tail];
 
 	// update the tail position
 	arinc429.callback.tail = next_tail;
@@ -1365,7 +1368,7 @@ bool handle_callbacks(void)
 	// switch on the message type to send
 	switch(message)
 	{
-		case ARINC429_CALLBACK_JOB_STATS_TX1  :  /* FALLTHROUGH */
+		case ARINC429_CALLBACK_JOB_STATS_TX1 :  /* FALLTHROUGH */
 		case ARINC429_CALLBACK_JOB_STATS_RX1 :  /* FALLTHROUGH */
 		case ARINC429_CALLBACK_JOB_STATS_RX2 :
 
@@ -1378,24 +1381,25 @@ bool handle_callbacks(void)
 
 			if (message == ARINC429_CALLBACK_JOB_STATS_TX1)
 			{
-				cb_heartbeat.channel          = ARINC429_CHANNEL_TX1;
-				cb_heartbeat.seq_number       = arinc429.tx_channel[0].common.stats_seq_number;
-				cb_heartbeat.frames_processed = arinc429.tx_channel[0].common.frames_processed_curr;
-				cb_heartbeat.frames_lost      = arinc429.tx_channel[0].common.frames_lost_curr;
+				seq_number = &arinc429.tx_channel[0].common.stats_seq_number;
 
-				// increment the sequence number, thereby skipping the value 0
-				if(++arinc429.tx_channel[0].common.stats_seq_number == 0)  arinc429.tx_channel[0].common.stats_seq_number = 1;
+				cb_heartbeat.channel          =  ARINC429_CHANNEL_TX1;
+				cb_heartbeat.seq_number       = *seq_number;
+				cb_heartbeat.frames_processed =  arinc429.tx_channel[0].common.frames_processed_curr;
+				cb_heartbeat.frames_lost      =  arinc429.tx_channel[0].common.frames_lost_curr;
 			}
 			else
 			{
-				cb_heartbeat.channel          = ARINC429_CHANNEL_RX1 + (message & 1);
-				cb_heartbeat.seq_number       = arinc429.rx_channel[message & 1].common.stats_seq_number;
-				cb_heartbeat.frames_processed = arinc429.rx_channel[message & 1].common.frames_processed_curr;
-				cb_heartbeat.frames_lost      = arinc429.rx_channel[message & 1].common.frames_lost_curr;
+				seq_number = &arinc429.rx_channel[message & 1].common.stats_seq_number;
 
-				// increment the sequence number, thereby skipping the value 0
-				if(++arinc429.rx_channel[message & 1].common.stats_seq_number == 0)  arinc429.rx_channel[message & 1].common.stats_seq_number = 1;
+				cb_heartbeat.channel          =  ARINC429_CHANNEL_RX1 + (message & 1);
+				cb_heartbeat.seq_number       = *seq_number;
+				cb_heartbeat.frames_processed =  arinc429.rx_channel[message & 1].common.frames_processed_curr;
+				cb_heartbeat.frames_lost      =  arinc429.rx_channel[message & 1].common.frames_lost_curr;
 			}
+
+			// increment the sequence number, thereby skipping the value 0
+			if(++(*seq_number) == 0) ++(*seq_number);
 
 			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_heartbeat, sizeof(Heartbeat_Callback));
@@ -1403,35 +1407,42 @@ bool handle_callbacks(void)
 			// ARINC429_CALLBACK_JOB_STATS_* done
 			break;
 
-
-		case ARINC429_CALLBACK_JOB_FRAME_RX1 :  /* FALLTHROUGH */
-		case ARINC429_CALLBACK_JOB_FRAME_RX2 :
+		case ARINC429_CALLBACK_JOB_NEW_RX1     :  /* FALLTHROUGH */
+		case ARINC429_CALLBACK_JOB_NEW_RX2     :  /* FALLTHROUGH */
+		case ARINC429_CALLBACK_JOB_FRAME_RX1   :  /* FALLTHROUGH */
+		case ARINC429_CALLBACK_JOB_FRAME_RX2   :  /* FALLTHROUGH */
+		case ARINC429_CALLBACK_JOB_TIMEOUT_RX1 :  /* FALLTHROUGH */
+		case ARINC429_CALLBACK_JOB_TIMEOUT_RX2 :
 
 			// create the callback message
 			tfp_make_default_header(&cb_frame.header, bootloader_get_uid(), sizeof(Frame_Callback), FID_CALLBACK_FRAME_MESSAGE);
 
-			// collect the callback message data
-			cb_frame.channel    = ARINC429_CHANNEL_RX1 + (message & 1);
-			cb_frame.timestamp  = timestamp;
-			cb_frame.seq_number = arinc429.rx_channel[message & 1].common.frame_seq_number;
-			cb_frame.frame      = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
+			// get a pointer to the sequence number
+			seq_number = &arinc429.rx_channel[message & 1].common.frame_seq_number;
 
-			// new or update?
-			if(arinc429.rx_channel[message & 1].frame_buffer[buffer].frame_age > 60000)
-			{
-				// new
-				cb_frame.status = ARINC429_STATUS_NEW;
-				cb_frame.age    = 0;
-			}
-			else
-			{
-				// update
-				cb_frame.status = ARINC429_STATUS_UPDATE;
-				cb_frame.age    = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame_age;
-			}
+			// collect the callback message data
+			cb_frame.channel    =  ARINC429_CHANNEL_RX1 + (message & 1);
+			cb_frame.seq_number = *seq_number;
+			cb_frame.timestamp  =  timestamp;
+			cb_frame.frame      =  frame;
 
 			// increment the sequence number, thereby skipping the value 0
-			if(++arinc429.rx_channel[message & 1].common.frame_seq_number == 0)  arinc429.rx_channel[message & 1].common.frame_seq_number = 1;
+			if(++(*seq_number) == 0) ++(*seq_number);
+
+			// collect the frame status and age
+			switch(message)
+			{
+				case ARINC429_CALLBACK_JOB_NEW_RX1     : /* FALLTHROUGH */
+				case ARINC429_CALLBACK_JOB_NEW_RX2     : cb_frame.status = ARINC429_STATUS_NEW;      cb_frame.age = 0;         break;
+
+				case ARINC429_CALLBACK_JOB_FRAME_RX1   : /* FALLTHROUGH */
+				case ARINC429_CALLBACK_JOB_FRAME_RX2   : cb_frame.status = ARINC429_STATUS_UPDATE;   cb_frame.age = age_token; break;
+
+				case ARINC429_CALLBACK_JOB_TIMEOUT_RX1 : /* FALLTHROUGH */
+				case ARINC429_CALLBACK_JOB_TIMEOUT_RX2 : cb_frame.status  = ARINC429_STATUS_TIMEOUT; cb_frame.age = age_token; break;
+
+				default                                : /* erroneous message type - do nothing */                             break;
+			}
 
 			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_frame, sizeof(Frame_Callback));
@@ -1440,44 +1451,23 @@ bool handle_callbacks(void)
 			break;
 
 
-		case ARINC429_CALLBACK_JOB_TIMEOUT_RX1 :  /* FALLTHROUGH */
-		case ARINC429_CALLBACK_JOB_TIMEOUT_RX2 :
-
-			// create the callback message
-			tfp_make_default_header(&cb_frame.header, bootloader_get_uid(), sizeof(Frame_Callback), FID_CALLBACK_FRAME_MESSAGE);
-
-			// collect the callback message data
-			cb_frame.channel    = ARINC429_CHANNEL_RX1 + (message & 1);
-			cb_frame.timestamp  = timestamp;
-			cb_frame.status     = ARINC429_STATUS_TIMEOUT;
-			cb_frame.seq_number = arinc429.rx_channel[message & 1].common.frame_seq_number;
-			cb_frame.frame      = arinc429.rx_channel[message & 1].frame_buffer[buffer].frame;
-			cb_frame.age        = arinc429.rx_channel[message & 1].timeout_period;
-
-			// increment the sequence number, thereby skipping the value 0
-			if(++arinc429.rx_channel[message & 1].common.frame_seq_number == 0)  arinc429.rx_channel[message & 1].common.frame_seq_number = 1;
-
-			// send the callback message
-			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_frame, sizeof(Frame_Callback));
-
-			// ARINC429_CALLBACK_JOB_TIMEOUT_RX* done
-			break;
-
-
 		case ARINC429_CALLBACK_JOB_SCHEDULER_CB :
 
 			// create the callback message
 			tfp_make_default_header(&cb_scheduler.header, bootloader_get_uid(), sizeof(Scheduler_Callback), FID_CALLBACK_SCHEDULER_MESSAGE);
 
+			// get a pointer to the sequence number
+			seq_number = &arinc429.tx_channel[0].common.frame_seq_number;
+
 			// collect the callback message data
-			cb_scheduler.channel      = ARINC429_CHANNEL_TX1;
-			cb_scheduler.timestamp    = timestamp;
-			cb_heartbeat.status       = ARINC429_STATUS_SCHEDULER;
-			cb_scheduler.seq_number   = arinc429.tx_channel[0].common.frame_seq_number;
-			cb_scheduler.userdata     = buffer;
+			cb_scheduler.channel      =  ARINC429_CHANNEL_TX1;
+			cb_scheduler.seq_number   = *seq_number;
+			cb_heartbeat.status       =  ARINC429_STATUS_SCHEDULER;
+			cb_scheduler.timestamp    =  timestamp;
+			cb_scheduler.userdata     =  (uint8_t)(age_token & 0x00FF);
 
 			// increment the sequence number, thereby skipping the value 0
-			if(++arinc429.tx_channel[0].common.frame_seq_number == 0)  arinc429.tx_channel[0].common.frame_seq_number = 1;
+			if(++(*seq_number) == 0) ++(*seq_number);
 
 			// send the callback message
 			bootloader_spitfp_send_ack_and_message(&bootloader_status, (uint8_t*)&cb_scheduler, sizeof(Scheduler_Callback));
